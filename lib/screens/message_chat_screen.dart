@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'camera_screen.dart';
+import 'add_file_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;
@@ -18,6 +20,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
+  bool _showAttachmentMenu = false;
 
   // Demo data (μετά θα έρχονται από DB)
   final List<_ChatMessage> _messages = [
@@ -39,6 +42,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
       body: Stack(
         children: [
+          // Tap detector για να κλείσει το menu
+          if (_showAttachmentMenu)
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _showAttachmentMenu = false;
+                });
+              },
+              child: Container(color: Colors.transparent),
+            ),
+
           Column(
             children: [
               SafeArea(bottom: false, child: _buildHeader()),
@@ -88,6 +102,14 @@ class _ChatScreenState extends State<ChatScreen> {
             bottom: 0,
             child: _buildInputBar(),
           ),
+
+          // Attachment menu overlay
+          if (_showAttachmentMenu)
+            Positioned(
+              bottom: 110,
+              left: 16,
+              child: _buildAttachmentMenu(),
+            ),
         ],
       ),
     );
@@ -144,15 +166,22 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Row(
         children: [
           // plus
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF1B5E20), width: 2),
-              color: const Color(0xFFFAFD9F),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _showAttachmentMenu = !_showAttachmentMenu;
+              });
+            },
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF1B5E20), width: 2),
+                color: const Color(0xFFFAFD9F),
+              ),
+              child: const Icon(Icons.add, color: Color(0xFF1B5E20)),
             ),
-            child: const Icon(Icons.add, color: Color(0xFF1B5E20)),
           ),
           const SizedBox(width: 10),
 
@@ -191,6 +220,74 @@ class _ChatScreenState extends State<ChatScreen> {
                 color: const Color(0xFFFAFD9F),
               ),
               child: const Icon(Icons.send, color: Color(0xFF1B5E20), size: 20),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttachmentMenu() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFD9F),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF1B5E20), width: 2),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Camera option
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const CameraScreen()),
+              );
+              setState(() {
+                _showAttachmentMenu = false;
+              });
+            },
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF1B5E20), width: 2),
+              ),
+              child: const Icon(
+                Icons.camera_alt,
+                color: Color(0xFF1B5E20),
+                size: 28,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // File/Document option
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddFileScreen()),
+              );
+              setState(() {
+                _showAttachmentMenu = false;
+              });
+            },
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF1B5E20), width: 2),
+              ),
+              child: const Icon(
+                Icons.description,
+                color: Color(0xFF1B5E20),
+                size: 28,
+              ),
             ),
           ),
         ],
