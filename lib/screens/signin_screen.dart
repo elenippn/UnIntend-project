@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'signin_company_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -11,6 +12,7 @@ class _SignInScreenState extends State<SignInScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  String _userType = 'Student'; // Default to Student
 
   @override
   void dispose() {
@@ -47,7 +49,9 @@ class _SignInScreenState extends State<SignInScreen> {
                   fontFamily: 'Trirong',
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
+              _buildUserTypeToggle(),
+              const SizedBox(height: 24),
               _buildTextField('Username', _usernameController),
               const SizedBox(height: 16),
               _buildPasswordField(),
@@ -199,8 +203,16 @@ class _SignInScreenState extends State<SignInScreen> {
         ),
       ),
       onPressed: () {
-        // TODO: Validate credentials and navigate to home_student
-        Navigator.of(context).pushNamed('/home_student');
+        // Navigate based on user type
+        if (_userType == 'Student') {
+          Navigator.of(context).pushNamed('/home_student');
+        } else if (_userType == 'Company') {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const SignInCompanyScreen(),
+            ),
+          );
+        }
       },
       child: const Text(
         'Continue',
@@ -211,6 +223,83 @@ class _SignInScreenState extends State<SignInScreen> {
           fontFamily: 'Trirong',
         ),
       ),
+    );
+  }
+
+  Widget _buildUserTypeToggle() {
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                _userType = 'Student';
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: _userType == 'Student'
+                        ? const Color(0xFF1B5E20)
+                        : Colors.grey,
+                    width: 2,
+                  ),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  'Student',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _userType == 'Student'
+                        ? const Color(0xFF1B5E20)
+                        : Colors.grey,
+                    fontFamily: 'Trirong',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                _userType = 'Company';
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: _userType == 'Company'
+                        ? const Color(0xFF1B5E20)
+                        : Colors.grey,
+                    width: 2,
+                  ),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  'Company',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _userType == 'Company'
+                        ? const Color(0xFF1B5E20)
+                        : Colors.grey,
+                    fontFamily: 'Trirong',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

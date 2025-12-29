@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'home_company_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -210,8 +211,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
         // Navigate based on selected role
         if (_selectedRole == 'Student') {
           Navigator.of(context).pushNamed('/home_student');
+        } else if (_selectedRole == 'Company') {
+          Navigator.of(context).pushReplacementNamed('/home_company');
         }
-        // TODO: Add navigation for Company and Admin roles
       },
       child: const Text(
         'Continue',

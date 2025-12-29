@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'home_company_screen.dart';
 
 class SignUpCompanyScreen extends StatefulWidget {
   const SignUpCompanyScreen({super.key});
@@ -78,12 +79,18 @@ class _SignUpCompanyScreenState extends State<SignUpCompanyScreen> {
               const SizedBox(height: 24),
               _buildContinueButton(),
               const SizedBox(height: 12),
-              const Text(
-                'I already have an account',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF1B5E20),
-                  fontFamily: 'Trirong',
+              GestureDetector(
+                onTap: () {
+                  Navigator.pop(context);
+                },
+                child: const Text(
+                  'I already have an account',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                    decoration: TextDecoration.underline,
+                  ),
                 ),
               ),
             ],
@@ -184,6 +191,10 @@ class _SignUpCompanyScreenState extends State<SignUpCompanyScreen> {
       ),
       onPressed: () {
         // Handle company sign up
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeCompanyScreen()),
+        );
       },
       child: const Text(
         'Continue',
