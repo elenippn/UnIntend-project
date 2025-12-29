@@ -32,6 +32,7 @@ dependencies:
     sdk: flutter
 
 
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
@@ -56,8 +57,17 @@ flutter:
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
-  uses-material-design: true
+  
 
+  uses-material-design: true
+  fonts:
+    - family: Trirong # Αυτό είναι το όνομα που θα χρησιμοποιήσετε στον κώδικα (TextStyle)
+      fonts:
+        - asset: fonts/Trirong-Regular.ttf
+        - asset: fonts/Trirong-Bold.ttf
+          weight: 700 # Ορίζουμε το βάρος για την bold έκδοση
+        - asset: fonts/Trirong-Italic.ttf
+          style: italic # Ορίζουμε το στυλ για την πλάγια (italic) έκδοση
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
