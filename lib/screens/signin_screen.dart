@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'signin_company_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -10,13 +9,16 @@ class SignInScreen extends StatefulWidget {
 
 class _SignInScreenState extends State<SignInScreen> {
   final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _rememberMe = false;
   String _userType = 'Student'; // Default to Student
 
   @override
   void dispose() {
     _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -52,29 +54,73 @@ class _SignInScreenState extends State<SignInScreen> {
               const SizedBox(height: 24),
               _buildUserTypeToggle(),
               const SizedBox(height: 24),
-              _buildTextField('Username', _usernameController),
-              const SizedBox(height: 16),
-              _buildPasswordField(),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    // Handle forgot password
-                  },
-                  child: const Text(
-                    'Forgot Password?',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF1B5E20),
-                      decoration: TextDecoration.underline,
-                      fontFamily: 'Trirong',
+              // Show different fields based on user type
+              if (_userType == 'Student') ...[
+                _buildTextField('Username', _usernameController),
+                const SizedBox(height: 16),
+                _buildPasswordField(),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      // Handle forgot password
+                    },
+                    child: const Text(
+                      'Forgot Password?',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF1B5E20),
+                        decoration: TextDecoration.underline,
+                        fontFamily: 'Trirong',
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ] else ...[
+                _buildTextField('Email', _emailController),
+                const SizedBox(height: 16),
+                _buildTextField('Password', _passwordController, isPassword: true),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Checkbox(
+                      value: _rememberMe,
+                      onChanged: (value) {
+                        setState(() {
+                          _rememberMe = value ?? false;
+                        });
+                      },
+                      activeColor: const Color(0xFF1B5E20),
+                    ),
+                    const Text(
+                      'Remember me',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () {
+                        // Forgot password
+                      },
+                      child: const Text(
+                        'Forgot password?',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF1B5E20),
+                          fontFamily: 'Trirong',
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 24),
-              _buildContinueButton(),
+              _buildSignInButton(),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -111,9 +157,11 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller) {
+  Widget _buildTextField(String label, TextEditingController controller,
+      {bool isPassword = false}) {
     return TextField(
       controller: controller,
+      obscureText: isPassword,
       style: const TextStyle(fontFamily: 'Trirong'),
       decoration: InputDecoration(
         labelText: label,
@@ -185,7 +233,7 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  Widget _buildContinueButton() {
+  Widget _buildSignInButton() {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.transparent,
@@ -207,16 +255,12 @@ class _SignInScreenState extends State<SignInScreen> {
         if (_userType == 'Student') {
           Navigator.of(context).pushNamed('/home_student');
         } else if (_userType == 'Company') {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const SignInCompanyScreen(),
-            ),
-          );
+          Navigator.of(context).pushNamed('/home_company');
         }
       },
-      child: const Text(
-        'Continue',
-        style: TextStyle(
+      child: Text(
+        _userType == 'Student' ? 'Continue' : 'Sign In',
+        style: const TextStyle(
           color: Color(0xFF1B5E20),
           fontSize: 14,
           fontWeight: FontWeight.w500,
