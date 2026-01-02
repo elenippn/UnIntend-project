@@ -7,7 +7,6 @@ import 'screens/newpost_student_screen.dart';
 import 'screens/search_student_screen.dart';
 import 'screens/messages_student_screen.dart';
 import 'screens/profile_student_screen.dart';
-import 'screens/signin_company_screen.dart';
 import 'screens/signup_company_screen.dart';
 import 'screens/home_company_screen.dart';
 import 'screens/messages_company_screen.dart';
@@ -44,7 +43,6 @@ class MyApp extends StatelessWidget {
         '/search_student': (context) => const SearchStudentScreen(),
         '/messages_student': (context) => const MessagesStudentScreen(),
         '/profile_student': (context) => const ProfileStudentScreen(),
-        '/signin_company': (context) => const SignInCompanyScreen(),
         '/signup_company': (context) => const SignUpCompanyScreen(),
         '/home_company': (context) => const HomeCompanyScreen(),
         '/search_company': (context) => const SearchCompanyScreen(),
