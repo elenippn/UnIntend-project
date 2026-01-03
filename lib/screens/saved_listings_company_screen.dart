@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../app_services.dart'; 
+import '../app_services.dart';
+import 'view_profile_student_screen.dart';
 
 class SavedListingsCompanyScreen extends StatefulWidget {
   const SavedListingsCompanyScreen({super.key});
@@ -42,15 +43,19 @@ class _SavedListingsCompanyScreenState extends State<SavedListingsCompanyScreen>
     }
   }
 
-  Future<void> _removeFromSaved(int studentUserId) async {
-    final idx = _saved.indexWhere((x) => (x['studentUserId'] as int) == studentUserId);
+  Future<void> _removeFromSaved(int studentUserId, {int? studentPostId}) async {
+    final idx = _saved.indexWhere((x) => ((x['studentUserId'] ?? x['id']) as int) == studentUserId);
     if (idx == -1) return;
     final removed = _saved[idx];
 
     setState(() => _saved.removeAt(idx));
 
     try {
-      await AppServices.saves.setCompanySaveStudent(studentUserId, false);
+      await AppServices.saves.setCompanySaveStudent(
+        studentUserId,
+        false,
+        studentPostId: studentPostId,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Removed from saved')),
@@ -121,15 +126,24 @@ class _SavedListingsCompanyScreenState extends State<SavedListingsCompanyScreen>
     return RefreshIndicator(
       onRefresh: _loadSaved,
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 32),
         itemCount: _saved.length,
         itemBuilder: (context, index) {
           final c = _saved[index];
 
-          // Expected from backend (we will implement):
-          // studentUserId, name, university, major/department, description/bio
-          final int studentUserId = c['studentUserId'] as int;
-          final String name = (c['name'] ?? '') as String;
+          final int studentUserId = (c['studentUserId'] ?? c['id']) as int;
+          final int? studentPostId = (c['studentPostId'] ?? c['postId']) as int?;
+          final String rawName = (
+            c['name'] ??
+            c['studentName'] ??
+            c['fullName'] ??
+            ''
+          ) as String;
+          final String firstName = (c['firstName'] ?? '') as String;
+          final String lastName = (c['lastName'] ?? '') as String;
+          final String name = rawName.isNotEmpty
+              ? rawName
+              : '$firstName $lastName'.trim();
           final String university = (c['university'] ?? '') as String;
           final String major = (c['major'] ?? c['department'] ?? '') as String;
           final String description = (c['description'] ?? c['bio'] ?? '') as String;
@@ -139,7 +153,15 @@ class _SavedListingsCompanyScreenState extends State<SavedListingsCompanyScreen>
             university: university,
             major: major,
             description: description,
-            onUnsave: () => _removeFromSaved(studentUserId),
+            onUnsave: () => _removeFromSaved(studentUserId, studentPostId: studentPostId),
+            onViewDetails: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ViewProfileStudentScreen(student: c),
+                ),
+              );
+            },
           );
         },
       ),
@@ -181,6 +203,7 @@ class _SavedListingsCompanyScreenState extends State<SavedListingsCompanyScreen>
     required String major,
     required String description,
     required VoidCallback onUnsave,
+    required VoidCallback onViewDetails,
   }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -199,7 +222,7 @@ class _SavedListingsCompanyScreenState extends State<SavedListingsCompanyScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        name,
+                        name.isNotEmpty ? name : 'Student',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -209,10 +232,11 @@ class _SavedListingsCompanyScreenState extends State<SavedListingsCompanyScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        major,
+                        major.isNotEmpty ? major : 'Department',
                         style: const TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1B5E20),
                           fontFamily: 'Trirong',
                         ),
                       ),
@@ -232,7 +256,7 @@ class _SavedListingsCompanyScreenState extends State<SavedListingsCompanyScreen>
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    university,
+                    university.isNotEmpty ? university : 'University',
                     style: const TextStyle(
                       fontSize: 12,
                       color: Colors.grey,
@@ -244,63 +268,32 @@ class _SavedListingsCompanyScreenState extends State<SavedListingsCompanyScreen>
             ),
             const SizedBox(height: 12),
             Text(
-              description,
+              description.isNotEmpty ? description : 'No bio yet',
               style: const TextStyle(
                 fontSize: 13,
                 color: Colors.black87,
                 fontFamily: 'Trirong',
               ),
-              maxLines: 2,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1B5E20),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: () {
-                      // TODO: open candidate profile screen
-                    },
-                    child: const Text(
-                      'Profile',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
-                  ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B5E20),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFF1B5E20)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: () {
-                      // TODO: message candidate (needs conversationId endpoint)
-                    },
-                    child: const Text(
-                      'Message',
-                      style: TextStyle(
-                        color: Color(0xFF1B5E20),
-                        fontSize: 12,
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
-                  ),
+              ),
+              onPressed: onViewDetails,
+              child: const Text(
+                'View Details',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Trirong',
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
+              ),
             ),
           ],
         ),

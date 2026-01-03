@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_services.dart';
 import 'message_chat_company_screen.dart';
 
 class MessagesCompanyScreen extends StatefulWidget {
@@ -12,30 +13,43 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
   String? _selectedFilter;
   bool _showFilter = false;
 
+  bool _isLoading = true;
+  String? _error;
+  List<dynamic> _applications = [];
+
   final List<String> filters = [
     'All',
-    'Accepted',
-    'Declined',
-    'Other',
+    'ACCEPTED',
+    'DECLINED',
+    'OTHER',
   ];
 
-  final List<Map<String, String>> messages = [
-    {
-      'student': 'Username1',
-      'status': 'Ready to connect?',
-      'type': 'Accepted',
-    },
-    {
-      'student': 'Username2',
-      'status': 'Declined',
-      'type': 'Declined',
-    },
-    {
-      'student': 'Username 3',
-      'status': 'Last sent message',
-      'type': 'Other',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadApplications();
+  }
+
+  Future<void> _loadApplications() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final data = await AppServices.applications.listApplications();
+      if (!mounted) return;
+      setState(() {
+        _applications = _dedupByConversationId(data);
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,16 +75,7 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
                       const SizedBox(height: 12),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: messages.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            return _buildMessageItem(messages[index]);
-                          },
-                        ),
+                        child: _buildBody(),
                       ),
                       const SizedBox(height: 20),
                     ],
@@ -209,9 +214,10 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
           context,
           MaterialPageRoute(
             builder: (_) => ChatCompanyScreen(
-              conversationId: message['student']!,
+              conversationId: int.parse(message['conversationId']!),
               title: message['student']!,
-              subtitle: '@${message['student']}',
+              subtitle: message['status']!,
+              canSend: message['status']!.toUpperCase() == 'ACCEPTED',
             ),
           ),
         );
@@ -262,10 +268,12 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    message['status']!,
+                      (message['lastMessage']?.isNotEmpty ?? false)
+                          ? message['lastMessage']!
+                          : message['status']!,
                     style: TextStyle(
                       fontSize: 12,
-                      color: message['type'] == 'Declined'
+                        color: (message['type'] ?? '').toUpperCase() == 'DECLINED'
                           ? Colors.red
                           : const Color(0xFF1B5E20),
                       fontFamily: 'Trirong',
@@ -331,5 +339,82 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
         size: 24,
       ),
     );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              'Failed to load applications:\n$_error',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: 'Trirong'),
+            ),
+          ),
+          ElevatedButton(onPressed: _loadApplications, child: const Text('Retry')),
+        ],
+      );
+    }
+
+    final filtered = _selectedFilter == null || _selectedFilter == 'All'
+      ? _applications
+      : _applications.where((a) {
+        final status = (a['status'] ?? '').toString().toUpperCase();
+        return status == _selectedFilter;
+        }).toList();
+
+    if (filtered.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Text(
+            'No messages',
+            style: TextStyle(fontFamily: 'Trirong'),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: filtered.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final item = filtered[index] as Map;
+        final status = (item['status'] ?? '') as String;
+        final student = (item['otherPartyName'] ?? item['student'] ?? 'Student') as String;
+        final lastMessage = (item['lastMessage'] ?? '') as String;
+        final conversationId = (item['conversationId'] as int?) ?? 0;
+
+        return _buildMessageItem({
+          'student': student,
+          'status': status,
+          'type': status,
+          'conversationId': conversationId.toString(),
+          'lastMessage': lastMessage,
+        });
+      },
+    );
+  }
+
+  List<dynamic> _dedupByConversationId(List<dynamic> raw) {
+    final Map<String, dynamic> byKey = {};
+    for (final item in raw) {
+      final cidRaw = item['conversationId'];
+      final cid = cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
+      final key = cid != null
+          ? 'cid_$cid'
+          : 'party_${(item['otherPartyName'] ?? item['student'] ?? '').toString()}';
+      if (key.trim().isEmpty) continue;
+      byKey[key] = item;
+    }
+    return byKey.values.toList();
   }
 }

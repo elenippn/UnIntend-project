@@ -22,4 +22,23 @@ class FeedApi {
       "saved": saved,
     });
   }
+
+  Future<List<dynamic>> getCompanyFeed() async {
+    final res = await client.get('/feed/company');
+    return res.data as List<dynamic>;
+  }
+
+  Future<void> decideOnStudent(int studentUserId, String decision) async {
+    await client.post('/decisions/company/student', data: {
+      "studentUserId": studentUserId,
+      "decision": decision,
+    });
+  }
+
+  Future<void> saveStudent(int studentUserId, bool saved) async {
+    await client.post('/saves/company/student', data: {
+      "studentUserId": studentUserId,
+      "saved": saved,
+    });
+  }
 }

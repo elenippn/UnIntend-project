@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_services.dart';
 import 'message_chat_screen.dart';
 
 class MessagesStudentScreen extends StatefulWidget {
@@ -12,36 +13,59 @@ class _MessagesStudentScreenState extends State<MessagesStudentScreen> {
   String? _selectedFilter;
   bool _showFilter = false;
 
+  bool _isLoading = true;
+  String? _error;
+  List<dynamic> _applications = [];
+
   final List<String> filters = [
     'All',
-    'Accepted',
-    'Declined',
-    'Pending',
-    'Other',
+    'ACCEPTED',
+    'DECLINED',
+    'PENDING',
+    'OTHER',
   ];
 
-  final List<Map<String, String>> messages = [
-    {
-      'company': 'Company Name 1',
-      'status': 'Pending...',
-      'type': 'Pending',
-    },
-    {
-      'company': 'Company Name 2',
-      'status': 'Ready to connect?',
-      'type': 'Accepted',
-    },
-    {
-      'company': 'Company Name 3',
-      'status': 'Declined',
-      'type': 'Declined',
-    },
-    {
-      'company': 'Company Name 4',
-      'status': 'Last sent message',
-      'type': 'Other',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadApplications();
+  }
+
+  Future<void> _loadApplications() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final data = await AppServices.applications.listApplications();
+      if (!mounted) return;
+      setState(() {
+        _applications = _dedupByConversationId(data);
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  List<dynamic> _dedupByConversationId(List<dynamic> raw) {
+    final Map<String, dynamic> byKey = {};
+    for (final item in raw) {
+      final cidRaw = item['conversationId'];
+      final cid = cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
+      // use conversationId if present, else fall back to otherPartyName to avoid duplicates
+      final key = cid != null
+          ? 'cid_$cid'
+          : 'party_${(item['otherPartyName'] ?? item['company'] ?? '').toString()}';
+      if (key.trim().isEmpty) continue;
+      byKey[key] = item; // keep last occurrence
+    }
+    return byKey.values.toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,16 +91,7 @@ class _MessagesStudentScreenState extends State<MessagesStudentScreen> {
                       const SizedBox(height: 12),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: messages.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            return _buildMessageItem(messages[index]);
-                          },
-                        ),
+                        child: _buildBody(),
                       ),
                       const SizedBox(height: 20),
                     ],
@@ -216,9 +231,10 @@ Widget _buildMessageItem(Map<String, String> message) {
         context,
         MaterialPageRoute(
           builder: (_) => ChatScreen(
-            conversationId: message['company']!, // προσωρινό id
+            conversationId: int.parse(message['conversationId']!),
             title: message['company']!,
-            subtitle: '@Username1',
+            subtitle: message['status']!,
+            canSend: message['status']!.toUpperCase() == 'ACCEPTED',
           ),
         ),
       );
@@ -269,12 +285,14 @@ Widget _buildMessageItem(Map<String, String> message) {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  message['status']!,
+                  (message['lastMessage']?.isNotEmpty ?? false)
+                      ? message['lastMessage']!
+                      : message['status']!,
                   style: TextStyle(
                     fontSize: 12,
-                    color: message['type'] == 'Declined'
-                        ? Colors.red
-                        : const Color(0xFF1B5E20),
+                    color: (message['type'] ?? '').toUpperCase() == 'DECLINED'
+                      ? Colors.red
+                      : const Color(0xFF1B5E20),
                     fontFamily: 'Trirong',
                   ),
                 ),
@@ -340,4 +358,67 @@ Widget _buildMessageItem(Map<String, String> message) {
       ),
     );
   }
+
+    Widget _buildBody() {
+      if (_isLoading) {
+        return const Center(child: CircularProgressIndicator());
+      }
+
+      if (_error != null) {
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                'Failed to load applications:\n$_error',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontFamily: 'Trirong'),
+              ),
+            ),
+            ElevatedButton(onPressed: _loadApplications, child: const Text('Retry')),
+          ],
+        );
+      }
+
+      final filtered = _selectedFilter == null || _selectedFilter == 'All'
+        ? _applications
+        : _applications.where((a) {
+          final status = (a['status'] ?? '').toString().toUpperCase();
+          return status == _selectedFilter;
+          }).toList();
+
+      if (filtered.isEmpty) {
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Text(
+              'No messages',
+              style: TextStyle(fontFamily: 'Trirong'),
+            ),
+          ),
+        );
+      }
+
+      return ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: filtered.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          final item = filtered[index] as Map;
+          final status = (item['status'] ?? '') as String;
+          final company = (item['otherPartyName'] ?? item['company'] ?? 'Company') as String;
+          final lastMessage = (item['lastMessage'] ?? '') as String;
+          final conversationId = (item['conversationId'] as int?) ?? 0;
+
+          return _buildMessageItem({
+            'company': company,
+            'status': status,
+            'type': status,
+            'conversationId': conversationId.toString(),
+            'lastMessage': lastMessage,
+          });
+        },
+      );
+    }
 }

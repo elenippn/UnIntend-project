@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_services.dart';
 import 'home_company_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -18,6 +19,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       TextEditingController();
 
   String? _selectedRole;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -207,23 +209,77 @@ class _SignUpScreenState extends State<SignUpScreen> {
           vertical: 12,
         ),
       ),
-      onPressed: () {
-        // Navigate based on selected role
-        if (_selectedRole == 'Student') {
-          Navigator.of(context).pushNamed('/home_student');
-        } else if (_selectedRole == 'Company') {
-          Navigator.of(context).pushReplacementNamed('/home_company');
-        }
-      },
-      child: const Text(
-        'Continue',
-        style: TextStyle(
-          color: Color(0xFF1B5E20),
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          fontFamily: 'Trirong',
-        ),
-      ),
+      onPressed: _isLoading ? null : _handleRegister,
+      child: _isLoading
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Text(
+              'Continue',
+              style: TextStyle(
+                color: Color(0xFF1B5E20),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'Trirong',
+              ),
+            ),
     );
+  }
+
+  Future<void> _handleRegister() async {
+    final name = _nameController.text.trim();
+    final surname = _surnameController.text.trim();
+    final username = _usernameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirm = _confirmPasswordController.text;
+    final role = _selectedRole;
+
+    if ([name, surname, username, email, password, confirm].any((v) => v.isEmpty) || role == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all fields and select role')),
+      );
+      return;
+    }
+    if (password != confirm) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await AppServices.auth.register(
+        name: name,
+        surname: surname,
+        username: username,
+        email: email,
+        password: password,
+        role: role.toUpperCase(),
+      );
+
+      final me = await AppServices.auth.getMe();
+      if (!mounted) return;
+      final resolvedRole = (me['role'] ?? role).toString().toUpperCase();
+      if (resolvedRole == 'STUDENT') {
+        Navigator.of(context).pushNamedAndRemoveUntil('/home_student', (_) => false);
+      } else if (resolvedRole == 'COMPANY') {
+        Navigator.of(context).pushNamedAndRemoveUntil('/home_company', (_) => false);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Registered but role is unknown')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sign up failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 }

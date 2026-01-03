@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_services.dart';
 import 'messages_company_screen.dart';
 import 'newpost_company_screen.dart';
 
@@ -13,6 +14,11 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
   String? _selectedDepartment;
   bool _showFilter = false;
 
+  bool _isLoading = true;
+  String? _error;
+  List<dynamic> _candidates = [];
+  final Set<int> _savedCandidateIds = {};
+
   final List<String> departments = [
     'Human Resources (HR)',
     'Marketing',
@@ -26,20 +32,108 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     'Software Development',
   ];
 
-  final List<Map<String, String>> applications = [
-    {
-      'username': 'Username 1',
-      'description': 'Application Description',
-    },
-    {
-      'username': 'Username 2',
-      'description': 'Application Description',
-    },
-    {
-      'username': 'Username 3',
-      'description': 'Application Description',
-    },
-  ];
+  int _extractStudentId(dynamic candidate) {
+    final raw = candidate['studentUserId'] ?? candidate['id'] ?? candidate['userId'];
+    if (raw is int) return raw;
+    return int.tryParse(raw?.toString() ?? '0') ?? 0;
+  }
+  
+  int? _extractStudentPostId(dynamic candidate) {
+    final raw = candidate['studentPostId'] ?? candidate['postId'];
+    if (raw is int) return raw;
+    return int.tryParse(raw?.toString() ?? '') ?? null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFeed();
+  }
+
+  Future<void> _loadFeed() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final data = await AppServices.feed.getCompanyFeed();
+      if (!mounted) return;
+      _savedCandidateIds
+        ..clear()
+        ..addAll(data
+            .where((c) => (c['saved'] ?? false) == true)
+            .map<int>(_extractStudentId));
+      setState(() {
+        _candidates = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _toggleSave(int studentUserId, {int? studentPostId}) async {
+    final wasSaved = _savedCandidateIds.contains(studentUserId);
+    setState(() {
+      if (wasSaved) {
+        _savedCandidateIds.remove(studentUserId);
+      } else {
+        _savedCandidateIds.add(studentUserId);
+      }
+    });
+
+    try {
+      await AppServices.saves.setCompanySaveStudent(
+        studentUserId,
+        !wasSaved,
+        studentPostId: studentPostId,
+      );
+    } catch (e) {
+      setState(() {
+        if (wasSaved) {
+          _savedCandidateIds.add(studentUserId);
+        } else {
+          _savedCandidateIds.remove(studentUserId);
+        }
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update save. Please retry.')),
+      );
+    }
+  }
+
+  Future<void> _decide(int studentUserId, String decision) async {
+    final index = _candidates.indexWhere(
+      (c) => _extractStudentId(c) == studentUserId,
+    );
+    dynamic removed;
+    if (index != -1) {
+      removed = _candidates[index];
+      setState(() {
+        _candidates.removeAt(index);
+      });
+    }
+
+    try {
+      await AppServices.feed.decideOnStudent(studentUserId, decision);
+    } catch (e) {
+      if (removed != null) {
+        setState(() {
+          _candidates.insert(index, removed);
+        });
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not send decision. Please retry.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,16 +157,7 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: applications.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(height: 16),
-                          itemBuilder: (context, index) {
-                            return _buildApplicationCard(applications[index]);
-                          },
-                        ),
+                        child: _buildBody(),
                       ),
                       const SizedBox(height: 20),
                     ],
@@ -196,7 +281,73 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     );
   }
 
-  Widget _buildApplicationCard(Map<String, String> application) {
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 60),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 40),
+        child: Column(
+          children: [
+            Text(
+              'Failed to load feed:\n$_error',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF1B5E20),
+                fontFamily: 'Trirong',
+              ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _loadFeed,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_candidates.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 40),
+        child: Center(
+          child: Text(
+            'No candidates available',
+            style: TextStyle(
+              color: Color(0xFF1B5E20),
+              fontFamily: 'Trirong',
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _candidates.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        return _buildCandidateCard(_candidates[index]);
+      },
+    );
+  }
+
+  Widget _buildCandidateCard(dynamic candidate) {
+    final int studentUserId = _extractStudentId(candidate);
+    final int? studentPostId = _extractStudentPostId(candidate);
+    final String name = (candidate['name'] ?? candidate['studentName'] ?? '') as String;
+    final String university = (candidate['university'] ?? '') as String;
+    final String department =
+        (candidate['department'] ?? candidate['major'] ?? candidate['skills'] ?? '') as String;
+    final String bio = (candidate['bio'] ?? candidate['description'] ?? '') as String;
+    final String skills = (candidate['skills'] ?? '') as String;
+    final bool isSaved = _savedCandidateIds.contains(studentUserId);
     return Container(
       decoration: BoxDecoration(
         border: Border.all(
@@ -230,13 +381,29 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                application['username']!,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1B5E20),
-                  fontFamily: 'Trirong',
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name.isNotEmpty ? name : 'Candidate',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
+                    if (university.isNotEmpty)
+                      Text(
+                        university,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF1B5E20),
+                          fontFamily: 'Trirong',
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],
@@ -262,42 +429,66 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (department.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          department,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1B5E20),
+                            fontFamily: 'Trirong',
+                          ),
+                        ),
+                      ),
                     Text(
-                      application['description']!,
+                      bio.isNotEmpty ? bio : 'No bio provided',
                       style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xFF1B5E20),
                         fontFamily: 'Trirong',
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: List.generate(
-                        3,
-                        (i) => Expanded(
-                          child: Container(
-                            height: 4,
-                            margin: EdgeInsets.only(
-                              right: i < 2 ? 4 : 0,
-                            ),
-                            color: Colors.grey[400],
-                          ),
+                    if (skills.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        skills,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF1B5E20),
+                          fontFamily: 'Trirong',
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          const Align(
-            alignment: Alignment.centerRight,
-            child: Icon(
-              Icons.favorite_outline,
-              color: Color(0xFF1B5E20),
-              size: 20,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
+                tooltip: 'Pass',
+                icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
+                onPressed: () => _decide(studentUserId, 'PASS'),
+              ),
+              IconButton(
+                tooltip: 'Like',
+                icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
+                onPressed: () => _decide(studentUserId, 'LIKE'),
+              ),
+              IconButton(
+                tooltip: 'Save',
+                icon: Icon(
+                  isSaved ? Icons.favorite : Icons.favorite_outline,
+                  color: const Color(0xFF1B5E20),
+                ),
+                onPressed: () => _toggleSave(studentUserId, studentPostId: studentPostId),
+              ),
+            ],
           ),
         ],
       ),
