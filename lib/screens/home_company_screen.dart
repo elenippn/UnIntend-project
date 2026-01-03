@@ -47,44 +47,51 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // Scrollable content
-          SingleChildScrollView(
-            padding: const EdgeInsets.only(top: 140),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: applications.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      return _buildApplicationCard(applications[index]);
-                    },
+          // Content
+          Column(
+            children: [
+              // SafeArea μόνο για το header
+              SafeArea(
+                bottom: false,
+                child: _buildStickyHeader(),
+              ),
+
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: 100),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: applications.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 16),
+                          itemBuilder: (context, index) {
+                            return _buildApplicationCard(applications[index]);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 100),
-              ],
-            ),
+              ),
+            ],
           ),
-          // Sticky header
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildStickyHeader(),
-          ),
+
           // Filter overlay
           if (_showFilter)
             Positioned(
-              top: 95,
+              top: 85,
               right: 16,
               width: 200,
               child: _buildFilterDropdown(),
             ),
-          // Bottom navigation
+
+          // Bottom navigation FULL WIDTH
           Positioned(
             bottom: 0,
             left: 0,

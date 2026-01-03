@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/app_services.dart'; 
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -11,9 +12,11 @@ class _SignInScreenState extends State<SignInScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+
   bool _obscurePassword = true;
   bool _rememberMe = false;
-  String _userType = 'Student'; // Default to Student
+  String _userType = 'Student'; // Default
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -21,6 +24,45 @@ class _SignInScreenState extends State<SignInScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    final identifier = (_userType == 'Student')
+        ? _usernameController.text.trim()
+        : _emailController.text.trim();
+
+    final password = _passwordController.text;
+
+    if (identifier.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill in all fields")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Calls backend: POST /auth/login, stores token
+      await AppServices.auth.login(identifier, password);
+
+      if (!context.mounted) return;
+
+      // Navigate based on user type (όπως πριν)
+      if (_userType == 'Student') {
+        Navigator.of(context).pushReplacementNamed('/home_student');
+      } else {
+        Navigator.of(context).pushReplacementNamed('/home_company');
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Login failed: $e")),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -54,7 +96,8 @@ class _SignInScreenState extends State<SignInScreen> {
               const SizedBox(height: 24),
               _buildUserTypeToggle(),
               const SizedBox(height: 24),
-              // Show different fields based on user type
+
+              // Student fields
               if (_userType == 'Student') ...[
                 _buildTextField('Username', _usernameController),
                 const SizedBox(height: 16),
@@ -64,7 +107,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () {
-                      // Handle forgot password
+                      // TODO: forgot password (optional)
                     },
                     child: const Text(
                       'Forgot Password?',
@@ -78,9 +121,10 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                 ),
               ] else ...[
+                // Company fields
                 _buildTextField('Email', _emailController),
                 const SizedBox(height: 16),
-                _buildTextField('Password', _passwordController, isPassword: true),
+                _buildPasswordField(), // reuse the same password field
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -104,7 +148,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     const Spacer(),
                     TextButton(
                       onPressed: () {
-                        // Forgot password
+                        // TODO: forgot password (optional)
                       },
                       child: const Text(
                         'Forgot password?',
@@ -119,9 +163,11 @@ class _SignInScreenState extends State<SignInScreen> {
                   ],
                 ),
               ],
+
               const SizedBox(height: 24),
               _buildSignInButton(),
               const SizedBox(height: 12),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -250,23 +296,22 @@ class _SignInScreenState extends State<SignInScreen> {
           vertical: 12,
         ),
       ),
-      onPressed: () {
-        // Navigate based on user type
-        if (_userType == 'Student') {
-          Navigator.of(context).pushNamed('/home_student');
-        } else if (_userType == 'Company') {
-          Navigator.of(context).pushNamed('/home_company');
-        }
-      },
-      child: Text(
-        _userType == 'Student' ? 'Continue' : 'Sign In',
-        style: const TextStyle(
-          color: Color(0xFF1B5E20),
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          fontFamily: 'Trirong',
-        ),
-      ),
+      onPressed: _isLoading ? null : _handleLogin,
+      child: _isLoading
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Text(
+              _userType == 'Student' ? 'Continue' : 'Sign In',
+              style: const TextStyle(
+                color: Color(0xFF1B5E20),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'Trirong',
+              ),
+            ),
     );
   }
 

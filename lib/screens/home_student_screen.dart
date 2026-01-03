@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_services.dart'; // άλλαξε path αν χρειάζεται
 
 class HomeStudentScreen extends StatefulWidget {
   const HomeStudentScreen({super.key});
@@ -10,6 +11,15 @@ class HomeStudentScreen extends StatefulWidget {
 class _HomeStudentScreenState extends State<HomeStudentScreen> {
   String? _selectedDepartment;
   bool _showFilter = false;
+
+  bool _isLoading = true;
+  String? _error;
+
+  // Θα γεμίσει από backend (/feed/student)
+  List<dynamic> _internships = [];
+
+  // Local "saved" state (για να αλλάζει το icon άμεσα)
+  final Set<int> _savedPostIds = {};
 
   final List<String> departments = [
     'Human Resources (HR)',
@@ -24,20 +34,103 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     'Software Development',
   ];
 
-  final List<Map<String, String>> internships = [
-    {
-      'company': 'Company Name 1',
-      'description': 'Internship Description',
-    },
-    {
-      'company': 'Company Name 1',
-      'description': 'Internship Description',
-    },
-    {
-      'company': 'Company Name 1',
-      'description': 'Internship Description',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadFeed();
+  }
+
+  Future<void> _loadFeed() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final data = await AppServices.feed.getStudentFeed();
+
+      if (!mounted) return;
+
+      setState(() {
+        _internships = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _toggleSave(int postId) async {
+    final wasSaved = _savedPostIds.contains(postId);
+
+    // optimistic update
+    setState(() {
+      if (wasSaved) {
+        _savedPostIds.remove(postId);
+      } else {
+        _savedPostIds.add(postId);
+      }
+    });
+
+    try {
+      await AppServices.feed.savePost(postId, !wasSaved);
+    } catch (e) {
+      // revert on error
+      setState(() {
+        if (wasSaved) {
+          _savedPostIds.add(postId);
+        } else {
+          _savedPostIds.remove(postId);
+        }
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Could not save: $e")),
+      );
+    }
+  }
+
+  // (προαιρετικό) like/pass με κουμπιά ή swipe later
+  Future<void> _decide(int postId, String decision) async {
+    // optimistic: remove card from UI
+    final index = _internships.indexWhere((p) => (p['id'] as int) == postId);
+    dynamic removed;
+    if (index != -1) {
+      removed = _internships[index];
+      setState(() {
+        _internships.removeAt(index);
+      });
+    }
+
+    try {
+      await AppServices.feed.decideOnPost(postId, decision);
+    } catch (e) {
+      // revert if failed
+      if (removed != null) {
+        setState(() {
+          _internships.insert(index, removed);
+        });
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Could not send decision: $e")),
+      );
+    }
+  }
+
+  List<dynamic> get _filteredInternships {
+    // ΠΡΟΣΟΧΗ: το backend feed δεν έχει department από default στο seed.
+    // Οπότε εδώ κρατάμε το filter UI, αλλά δεν φιλτράρουμε πραγματικά
+    // μέχρι να προσθέσουμε πεδίο department/tag στο backend.
+    // Αν θες, μπορώ να σου δείξω πώς να το προσθέσουμε σωστά.
+    return _internships;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,44 +138,42 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // Scrollable content
-          SingleChildScrollView(
-            padding: const EdgeInsets.only(top: 140),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: internships.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      return _buildInternshipCard(internships[index]);
-                    },
+          // Content
+          Column(
+            children: [
+              // SafeArea μόνο για το header
+              SafeArea(
+                bottom: false,
+                child: _buildStickyHeader(),
+              ),
+
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: 100),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _buildBody(),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 100),
-              ],
-            ),
+              ),
+            ],
           ),
-          // Sticky header
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildStickyHeader(),
-          ),
+
           // Filter overlay
           if (_showFilter)
             Positioned(
-              top: 95,
+              top: 85,
               right: 16,
               width: 200,
               child: _buildFilterDropdown(),
             ),
-          // Bottom navigation
+
+          // Bottom navigation FULL WIDTH
           Positioned(
             bottom: 0,
             left: 0,
@@ -91,6 +182,65 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 60),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 40),
+        child: Column(
+          children: [
+            Text(
+              "Failed to load feed:\n$_error",
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF1B5E20),
+                fontFamily: 'Trirong',
+              ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _loadFeed,
+              child: const Text("Retry"),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final items = _filteredInternships;
+
+    if (items.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 40),
+        child: Center(
+          child: Text(
+            "No internships available",
+            style: TextStyle(
+              color: Color(0xFF1B5E20),
+              fontFamily: 'Trirong',
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        return _buildInternshipCard(items[index]);
+      },
     );
   }
 
@@ -187,7 +337,14 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     );
   }
 
-  Widget _buildInternshipCard(Map<String, String> internship) {
+  Widget _buildInternshipCard(dynamic internship) {
+    // Expecting backend fields like: id, companyName, title, description, location
+    final int postId = (internship['id'] as int);
+    final String companyName = (internship['companyName'] ?? 'Company') as String;
+    final String description = (internship['description'] ?? '') as String;
+
+    final bool isSaved = _savedPostIds.contains(postId);
+
     return Container(
       decoration: BoxDecoration(
         border: Border.all(
@@ -222,7 +379,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                internship['company']!,
+                companyName,
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -254,7 +411,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      internship['description']!,
+                      description,
                       style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xFF1B5E20),
@@ -268,9 +425,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
                         (i) => Expanded(
                           child: Container(
                             height: 4,
-                            margin: EdgeInsets.only(
-                              right: i < 2 ? 4 : 0,
-                            ),
+                            margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
                             color: Colors.grey[400],
                           ),
                         ),
@@ -282,13 +437,30 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          const Align(
-            alignment: Alignment.centerRight,
-            child: Icon(
-              Icons.favorite_outline,
-              color: Color(0xFF1B5E20),
-              size: 20,
-            ),
+
+          // Actions row (προσωρινό like/pass + save)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
+                tooltip: "Pass",
+                icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
+                onPressed: () => _decide(postId, "PASS"),
+              ),
+              IconButton(
+                tooltip: "Like",
+                icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
+                onPressed: () => _decide(postId, "LIKE"),
+              ),
+              IconButton(
+                tooltip: "Save",
+                icon: Icon(
+                  isSaved ? Icons.favorite : Icons.favorite_outline,
+                  color: const Color(0xFF1B5E20),
+                ),
+                onPressed: () => _toggleSave(postId),
+              ),
+            ],
           ),
         ],
       ),
@@ -310,9 +482,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavIcon(Icons.home, () {
-            // Already on Home screen
-          }),
+          _buildNavIcon(Icons.home, () {}),
           _buildNavIcon(Icons.search, () {
             Navigator.pushNamed(context, '/search_student');
           }),
