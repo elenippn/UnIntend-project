@@ -43,16 +43,20 @@ class _SignInScreenState extends State<SignInScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Calls backend: POST /auth/login, stores token
       await AppServices.auth.login(identifier, password);
+      final me = await AppServices.auth.getMe();
 
       if (!context.mounted) return;
 
-      // Navigate based on user type (όπως πριν)
-      if (_userType == 'Student') {
+      final role = (me['role'] ?? '').toString().toUpperCase();
+      if (role == 'STUDENT') {
         Navigator.of(context).pushReplacementNamed('/home_student');
-      } else {
+      } else if (role == 'COMPANY') {
         Navigator.of(context).pushReplacementNamed('/home_company');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Unknown role returned from server")),
+        );
       }
     } catch (e) {
       if (!context.mounted) return;
@@ -122,7 +126,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
               ] else ...[
                 // Company fields
-                _buildTextField('Email', _emailController),
+                _buildTextField('Username or Email', _emailController),
                 const SizedBox(height: 16),
                 _buildPasswordField(), // reuse the same password field
                 const SizedBox(height: 12),

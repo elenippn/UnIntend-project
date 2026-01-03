@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_services.dart';
 import 'signup_company_screen.dart';
 import 'home_company_screen.dart';
 
@@ -13,6 +14,7 @@ class _SignInCompanyScreenState extends State<SignInCompanyScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _rememberMe = false;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -182,22 +184,62 @@ class _SignInCompanyScreenState extends State<SignInCompanyScreen> {
           vertical: 12,
         ),
       ),
-      onPressed: () {
-        // Handle sign in
+      onPressed: _isLoading ? null : _handleLogin,
+      child: _isLoading
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Text(
+              'Sign In',
+              style: TextStyle(
+                color: Color(0xFF1B5E20),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'Trirong',
+              ),
+            ),
+    );
+  }
+
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all fields')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await AppServices.auth.login(email, password);
+      final me = await AppServices.auth.getMe();
+
+      if (!mounted) return;
+      final role = (me['role'] ?? '').toString().toUpperCase();
+      if (role == 'COMPANY') {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const HomeCompanyScreen()),
         );
-      },
-      child: const Text(
-        'Sign In',
-        style: TextStyle(
-          color: Color(0xFF1B5E20),
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          fontFamily: 'Trirong',
-        ),
-      ),
-    );
+      } else if (role == 'STUDENT') {
+        Navigator.pushReplacementNamed(context, '/home_student');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unknown role returned from server')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Login failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 }

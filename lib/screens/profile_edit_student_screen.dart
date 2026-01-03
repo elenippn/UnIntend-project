@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_services.dart';
 
 class ProfileEditStudentScreen extends StatefulWidget {
   const ProfileEditStudentScreen({super.key});
@@ -19,6 +20,16 @@ class _ProfileEditStudentScreenState extends State<ProfileEditStudentScreen> {
   bool _showBioInput = false;
   bool _showStudiesInput = false;
   bool _showExperienceInput = false;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _error;
+  String? _username;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,17 +43,7 @@ class _ProfileEditStudentScreenState extends State<ProfileEditStudentScreen> {
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.only(bottom: 120),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 24),
-                      _buildUserEditInfo(),
-                      const SizedBox(height: 24),
-                      _buildAboutEditSection(),
-                      const SizedBox(height: 16),
-                      _buildPostsEditSection(),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
+                  child: _buildContent(),
                 ),
               ),
             ],
@@ -106,7 +107,51 @@ class _ProfileEditStudentScreenState extends State<ProfileEditStudentScreen> {
     );
   }
 
+  Widget _buildContent() {
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 40),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null) {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Failed to load profile:\n$_error',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: 'Trirong'),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: _loadProfile,
+            child: const Text('Retry'),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        const SizedBox(height: 24),
+        _buildUserEditInfo(),
+        const SizedBox(height: 24),
+        _buildAboutEditSection(),
+        const SizedBox(height: 16),
+        _buildPostsEditSection(),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
   Widget _buildUserEditInfo() {
+    final displayUsername = (_username?.isNotEmpty ?? false)
+        ? '@$_username'
+        : '@username';
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -142,14 +187,14 @@ class _ProfileEditStudentScreenState extends State<ProfileEditStudentScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
-                const Text(
-                  '@username',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF1B5E20),
-                    fontFamily: 'Trirong',
-                  ),
-                ),
+                    Text(
+                      displayUsername,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
                 const SizedBox(height: 8),
                 Container(
                   padding:
@@ -354,22 +399,84 @@ class _ProfileEditStudentScreenState extends State<ProfileEditStudentScreen> {
               borderRadius: BorderRadius.circular(6),
             ),
           ),
-          onPressed: () {
-            // TODO: Save profile changes
-            Navigator.pop(context);
-          },
-          child: const Text(
-            'Save',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.white,
-              fontFamily: 'Trirong',
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          onPressed: (_isSaving || _isLoading) ? null : _saveProfile,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Text(
+                  'Save',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                    fontFamily: 'Trirong',
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
         ),
       ),
     );
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final me = await AppServices.auth.getMe();
+      if (!mounted) return;
+      setState(() {
+        _username = (me['username'] ?? '') as String?;
+        _nameController.text = (me['name'] ?? '') as String;
+        _surnameController.text = (me['surname'] ?? '') as String;
+        _bioController.text = (me['bio'] ?? '') as String;
+        _studiesController.text = (me['studies'] ?? '') as String;
+        _experienceController.text = (me['experience'] ?? '') as String;
+        _showBioInput = true;
+        _showStudiesInput = true;
+        _showExperienceInput = true;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    setState(() => _isSaving = true);
+    try {
+      await AppServices.auth.updateMe(
+        name: _nameController.text.trim(),
+        surname: _surnameController.text.trim(),
+        bio: _bioController.text.trim(),
+        studies: _studiesController.text.trim(),
+        experience: _experienceController.text.trim(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Save failed: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override

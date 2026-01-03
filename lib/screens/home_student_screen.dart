@@ -53,6 +53,9 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
 
       setState(() {
         _internships = data;
+        _savedPostIds
+          ..clear()
+          ..addAll(data.where((p) => (p['saved'] ?? false) == true).map<int>((p) => (p['id'] as int)));
         _isLoading = false;
       });
     } catch (e) {
@@ -78,7 +81,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     });
 
     try {
-      await AppServices.feed.savePost(postId, !wasSaved);
+      await AppServices.saves.setStudentSave(postId, !wasSaved);
     } catch (e) {
       // revert on error
       setState(() {
@@ -148,16 +151,20 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
               ),
 
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 100),
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _buildBody(),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
+                child: RefreshIndicator(
+                  onRefresh: _loadFeed,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 100),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: _buildBody(),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -341,7 +348,9 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     // Expecting backend fields like: id, companyName, title, description, location
     final int postId = (internship['id'] as int);
     final String companyName = (internship['companyName'] ?? 'Company') as String;
+    final String title = (internship['title'] ?? '') as String;
     final String description = (internship['description'] ?? '') as String;
+    final String location = (internship['location'] ?? '') as String;
 
     final bool isSaved = _savedPostIds.contains(postId);
 
@@ -410,6 +419,19 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (title.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1B5E20),
+                            fontFamily: 'Trirong',
+                          ),
+                        ),
+                      ),
                     Text(
                       description,
                       style: const TextStyle(
@@ -418,6 +440,27 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
                         fontFamily: 'Trirong',
                       ),
                     ),
+                    if (location.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on, size: 14, color: Color(0xFF1B5E20)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              location,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF1B5E20),
+                                fontFamily: 'Trirong',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     Row(
                       children: List.generate(

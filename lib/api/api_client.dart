@@ -32,4 +32,13 @@ class ApiClient {
       options: Options(headers: token != null ? {'Authorization': 'Bearer $token'} : null),
     );
   }
+
+  Future<Response<T>> put<T>(String path, {Map<String, dynamic>? data}) async {
+    final token = await getToken();
+    return dio.put<T>(
+      path,
+      data: data,
+      options: Options(headers: token != null ? {'Authorization': 'Bearer $token'} : null),
+    );
+  }
 }

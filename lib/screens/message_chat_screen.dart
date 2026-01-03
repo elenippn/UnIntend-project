@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
+import '../app_services.dart';
 import 'camera_screen.dart';
 import 'add_file_screen.dart';
 
 class ChatScreen extends StatefulWidget {
-  final String conversationId;
+  final int conversationId;
   final String title;
   final String subtitle;
+  final bool canSend;
 
   const ChatScreen({
     super.key,
     required this.conversationId,
     required this.title,
     required this.subtitle,
+    required this.canSend,
   });
 
   @override
@@ -21,19 +24,36 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   bool _showAttachmentMenu = false;
+  bool _loadingMessages = true;
+  String? _error;
+  List<dynamic> _messages = [];
 
-  // Demo data (μετά θα έρχονται από DB)
-  final List<_ChatMessage> _messages = [
-    _ChatMessage(
-      text:
-          'Καλησπέρα σας, είδαμε ότι ενδιαφέρεστε για τη θέση... (κλπ)',
-      isMe: false,
-    ),
-    _ChatMessage(
-      text: 'Καλησπέρα σας, σας επισυνάπτω τώρα το βιογραφικό μου...',
-      isMe: true,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadMessages();
+  }
+
+  Future<void> _loadMessages() async {
+    setState(() {
+      _loadingMessages = true;
+      _error = null;
+    });
+    try {
+      final data = await AppServices.chat.getMessages(widget.conversationId);
+      if (!mounted) return;
+      setState(() {
+        _messages = data;
+        _loadingMessages = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loadingMessages = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,41 +77,7 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               SafeArea(bottom: false, child: _buildHeader()),
 
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(left: 16, right: 16, bottom: 110, top: 12),
-                  itemCount: _messages.length + 1,
-                  itemBuilder: (context, index) {
-                    // First item: "Ready to connect?" as text with link icon
-                    if (index == 0) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.link, color: const Color(0xFF1B5E20), size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Ready to connect?',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF1B5E20),
-                                fontFamily: 'Trirong',
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                    // Rest of the messages
-                    final m = _messages[index - 1];
-                    return _ChatBubble(
-                      text: m.text,
-                      isMe: m.isMe,
-                    );
-                  },
-                ),
-              ),
+              Expanded(child: _buildMessagesList()),
             ],
           ),
 
@@ -210,16 +196,24 @@ class _ChatScreenState extends State<ChatScreen> {
 
           // send
           GestureDetector(
-            onTap: _send,
+            onTap: widget.canSend ? _send : () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Conversation not accepted yet')),
+              );
+            },
             child: Container(
               width: 44,
               height: 44,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFF1B5E20), width: 2),
-                color: const Color(0xFFFAFD9F),
+                color: widget.canSend ? const Color(0xFFFAFD9F) : Colors.grey[300],
               ),
-              child: const Icon(Icons.send, color: Color(0xFF1B5E20), size: 20),
+              child: Icon(
+                Icons.send,
+                color: widget.canSend ? const Color(0xFF1B5E20) : Colors.grey,
+                size: 20,
+              ),
             ),
           ),
         ],
@@ -295,35 +289,125 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _send() {
+  Widget _buildMessagesList() {
+    if (_loadingMessages) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                'Failed to load messages:\n$_error',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontFamily: 'Trirong', color: Color(0xFF1B5E20)),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: _loadMessages,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_messages.isEmpty) {
+      return const Center(
+        child: Text(
+          'No messages yet',
+          style: TextStyle(fontFamily: 'Trirong', color: Color(0xFF1B5E20)),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 110, top: 12),
+      itemCount: _messages.length,
+      itemBuilder: (context, index) {
+        final m = _messages[index] as Map;
+        final String text = (m['text'] ?? m['message'] ?? '') as String;
+        final bool isSystem = (m['isSystem'] == true) ||
+            (m['type']?.toString().toUpperCase() == 'SYSTEM');
+        final bool isMe = (m['isMine'] == true) ||
+            (m['fromMe'] == true) ||
+            (m['isMe'] == true);
+
+        return _ChatBubble(
+          text: text,
+          isMe: isMe,
+          isSystem: isSystem,
+        );
+      },
+    );
+  }
+
+  Future<void> _send() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || !widget.canSend) return;
+
     setState(() {
-      _messages.add(_ChatMessage(text: text, isMe: true));
+      _messages.add({
+        'text': text,
+        'isMe': true,
+      });
     });
     _controller.clear();
 
-    // TODO: εδώ θα κάνεις write στη βάση (Firestore/DB)
+    try {
+      await AppServices.chat.sendMessage(widget.conversationId, text);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send: $e')),
+      );
+    }
   }
-}
-
-class _ChatMessage {
-  final String text;
-  final bool isMe;
-  _ChatMessage({required this.text, required this.isMe});
 }
 
 class _ChatBubble extends StatelessWidget {
   final String text;
   final bool isMe;
+  final bool isSystem;
 
-  const _ChatBubble({required this.text, required this.isMe});
+  const _ChatBubble({required this.text, required this.isMe, this.isSystem = false});
 
   @override
   Widget build(BuildContext context) {
-    final bubbleColor = isMe ? const Color(0xFFFAFD9F) : const Color(0xFFC9D3C9);
+    if (isSystem) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF1B5E20), width: 1.5),
+            ),
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF1B5E20),
+                fontFamily: 'Trirong',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final bubbleColor = isMe
+        ? const Color(0xFFFAFD9F)
+        : const Color(0xFFC9D3C9);
     final align = isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    final radius = BorderRadius.circular(14);
 
     return Column(
       crossAxisAlignment: align,
@@ -335,9 +419,16 @@ class _ChatBubble extends StatelessWidget {
           decoration: BoxDecoration(
             color: bubbleColor,
             border: Border.all(color: const Color(0xFF1B5E20), width: 2),
-            borderRadius: radius,
+            borderRadius: BorderRadius.circular(14),
           ),
-          child: Text(text),
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 15,
+              color: Color(0xFF1B5E20),
+              fontFamily: 'Trirong',
+            ),
+          ),
         ),
       ],
     );

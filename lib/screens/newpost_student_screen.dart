@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_services.dart';
 
 class NewPostStudentScreen extends StatefulWidget {
   const NewPostStudentScreen({super.key});
@@ -10,6 +11,8 @@ class NewPostStudentScreen extends StatefulWidget {
 class _NewPostStudentScreenState extends State<NewPostStudentScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _categoryController = TextEditingController();
+  bool _isSubmitting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +99,34 @@ class _NewPostStudentScreenState extends State<NewPostStudentScreen> {
                           ],
                         ),
                         const SizedBox(height: 20),
+                        const Text(
+                          'Category (optional)',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF1B5E20),
+                            fontFamily: 'Trirong',
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _categoryController,
+                          decoration: InputDecoration(
+                            hintText: 'e.g. Seminar, Internship, Experience',
+                            hintStyle: TextStyle(
+                              color: Colors.grey[400],
+                              fontFamily: 'Trirong',
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF1B5E20),
+                            fontFamily: 'Trirong',
+                          ),
+                        ),
+                        const SizedBox(height: 20),
                         // Description section
                         const Text(
                           'Share your experience here...',
@@ -132,9 +163,7 @@ class _NewPostStudentScreenState extends State<NewPostStudentScreen> {
                 const SizedBox(height: 32),
                 // Post button
                 ElevatedButton(
-                  onPressed: () {
-                    // TODO: Handle post submission
-                  },
+                  onPressed: _isSubmitting ? null : _submitPost,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1B5E20),
                     padding: const EdgeInsets.symmetric(
@@ -145,15 +174,24 @@ class _NewPostStudentScreenState extends State<NewPostStudentScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text(
-                    'Post',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.white,
-                      fontFamily: 'Trirong',
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'Post',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.white,
+                            fontFamily: 'Trirong',
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
                 const SizedBox(height: 40),
               ],
@@ -282,6 +320,43 @@ class _NewPostStudentScreenState extends State<NewPostStudentScreen> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _categoryController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submitPost() async {
+    final title = _titleController.text.trim();
+    final description = _descriptionController.text.trim();
+    final category = _categoryController.text.trim().isEmpty
+        ? null
+        : _categoryController.text.trim();
+
+    if (title.isEmpty || description.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Title and description are required')),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      await AppServices.posts.createProfilePost(
+        title: title,
+        description: description,
+        category: category,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Post created')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Post failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 }

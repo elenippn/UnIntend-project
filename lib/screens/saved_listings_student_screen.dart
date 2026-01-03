@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../app_services.dart'; 
+import '../app_services.dart';
+import 'view_profile_company_screen.dart';
 
 class SavedListingsStudentScreen extends StatefulWidget {
   const SavedListingsStudentScreen({super.key});
@@ -44,7 +45,7 @@ class _SavedListingsStudentScreenState extends State<SavedListingsStudentScreen>
 
   Future<void> _removeFromSaved(int postId) async {
     // optimistic remove
-    final idx = _saved.indexWhere((x) => (x['postId'] as int) == postId);
+    final idx = _saved.indexWhere((x) => ((x['postId'] ?? x['id']) as int) == postId);
     if (idx == -1) return;
     final removed = _saved[idx];
 
@@ -148,9 +149,10 @@ class _SavedListingsStudentScreenState extends State<SavedListingsStudentScreen>
           final title = (item['title'] ?? '') as String;
           final location = (item['location'] ?? '') as String;
           final description = (item['description'] ?? '') as String;
-          final postId = item['postId'] as int;
+          final postId = (item['postId'] ?? item['id']) as int;
 
           return _buildListingCard(
+            listing: item,
             company: company,
             position: title,
             location: location,
@@ -192,6 +194,7 @@ class _SavedListingsStudentScreenState extends State<SavedListingsStudentScreen>
   }
 
   Widget _buildListingCard({
+    required Map listing,
     required String company,
     required String position,
     required String location,
@@ -279,7 +282,12 @@ class _SavedListingsStudentScreenState extends State<SavedListingsStudentScreen>
                 ),
               ),
               onPressed: () {
-                // TODO: Navigate to listing details if you have a screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ViewProfileCompanyScreen(company: listing),
+                  ),
+                );
               },
               child: const Text(
                 'View Details',

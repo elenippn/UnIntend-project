@@ -32,4 +32,36 @@ class AuthApi {
     final token = (res.data as dynamic)['access_token'] as String;
     await client.setToken(token);
   }
+
+  Future<Map<String, dynamic>> getMe() async {
+    final res = await client.get('/auth/me');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updateMe({
+    String? name,
+    String? surname,
+    String? bio,
+    String? studies,
+    String? experience,
+    String? companyName,
+    String? companyBio,
+  }) async {
+    final payload = <String, dynamic>{
+      "name": name,
+      "surname": surname,
+      "bio": bio,
+      "studies": studies,
+      "experience": experience,
+      "companyName": companyName,
+      "companyBio": companyBio,
+    }..removeWhere((key, value) => value == null);
+
+    final res = await client.put('/auth/me', data: payload);
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<void> logout() async {
+    await client.clearToken();
+  }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_services.dart';
 import 'profile_edit_company_screen.dart';
 
 class ProfileCompanyScreen extends StatefulWidget {
@@ -9,6 +10,40 @@ class ProfileCompanyScreen extends StatefulWidget {
 }
 
 class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
+  bool _isLoading = true;
+  String? _error;
+  Map<String, dynamic>? _profile;
+  List<dynamic> _companyPosts = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final me = await AppServices.auth.getMe();
+      final posts = await AppServices.posts.listMyCompanyPosts();
+      if (!mounted) return;
+      setState(() {
+        _profile = me;
+        _companyPosts = posts;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -24,11 +59,7 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
                   child: Column(
                     children: [
                       const SizedBox(height: 24),
-                      _buildUserInfo(),
-                      const SizedBox(height: 24),
-                      _buildAboutSection(),
-                      const SizedBox(height: 16),
-                      _buildAvailableInternshipsSection(),
+                      _buildContent(),
                       const SizedBox(height: 20),
                     ],
                   ),
@@ -79,6 +110,7 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
               ),
               GestureDetector(
                 onTap: () {
+                  AppServices.auth.logout();
                   Navigator.pushNamedAndRemoveUntil(
                     context,
                     '/signin',
@@ -108,7 +140,46 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
     );
   }
 
+  Widget _buildContent() {
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 40),
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (_error != null) {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Failed to load profile:\n$_error',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: 'Trirong'),
+            ),
+          ),
+          ElevatedButton(onPressed: _loadProfile, child: const Text('Retry')),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        _buildUserInfo(),
+        const SizedBox(height: 24),
+        _buildAboutSection(),
+        const SizedBox(height: 16),
+        _buildAvailableInternshipsSection(),
+      ],
+    );
+  }
+
   Widget _buildUserInfo() {
+    final username = (_profile?['username'] ?? '') as String;
+    final companyName = (_profile?['companyName'] ?? _profile?['name'] ?? '') as String;
+    final displayUsername = username.isNotEmpty ? '@$username' : '@username';
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -138,35 +209,38 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
-                const Text(
-                  '@username',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF1B5E20),
-                    fontFamily: 'Trirong',
-                  ),
-                ),
+                    Text(
+                      displayUsername,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Company Name',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1B5E20),
-                    fontFamily: 'Trirong',
-                  ),
-                ),
+                    Text(
+                      companyName.isNotEmpty ? companyName : 'Company Name',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
               ],
             ),
           ),
           GestureDetector(
-            onTap: () {
-              Navigator.push(
+            onTap: () async {
+              final updated = await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => const ProfileEditCompanyScreen(),
                 ),
               );
+              if (updated == true) {
+                _loadProfile();
+              }
             },
             child: const Text(
               'Edit',
@@ -184,22 +258,26 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
   }
 
   Widget _buildAboutSection() {
+    final bio = (_profile?['companyBio'] ?? _profile?['bio'] ?? '') as String;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: SizedBox(
+      child: Container(
         width: double.infinity,
-        height: 180,
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: const Color(0xFF1B5E20),
-              width: 2,
-            ),
-            borderRadius: BorderRadius.circular(12),
+        constraints: const BoxConstraints(minHeight: 120),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: const Color(0xFF1B5E20),
+            width: 2,
           ),
-          padding: const EdgeInsets.all(16),
-          child: const Center(
-            child: Text(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            const Text(
               'About/Bio',
               style: TextStyle(
                 fontSize: 14,
@@ -208,69 +286,196 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
                 fontFamily: 'Trirong',
               ),
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(
+              bio.isNotEmpty ? bio : 'No bio yet',
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF1B5E20),
+                fontFamily: 'Trirong',
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildAvailableInternshipsSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          SizedBox(
-            width: double.infinity,
-            height: 150,
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: const Color(0xFF1B5E20),
-                  width: 2,
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_companyPosts.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          children: [
+            SizedBox(
+              width: double.infinity,
+              height: 150,
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: const Color(0xFF1B5E20),
+                    width: 2,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.all(16),
-              child: const Center(
-                child: Text(
-                  'Available Internship ads',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1B5E20),
-                    fontFamily: 'Trirong',
+                padding: const EdgeInsets.all(16),
+                child: const Center(
+                  child: Text(
+                    'No posts yet',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1B5E20),
+                      fontFamily: 'Trirong',
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
+            const SizedBox(height: 16),
+            _buildCreatePostButton(),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          ..._companyPosts.map((p) => _buildCompanyPostCard(p)).toList(),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1B5E20),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              icon: const Icon(Icons.favorite, color: Colors.white),
-              label: const Text(
-                'Saved Candidates',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'Trirong',
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              onPressed: () {
-                Navigator.pushNamed(context, '/saved_listings_company');
-              },
-            ),
-          ),
+          _buildCreatePostButton(),
         ],
       ),
+    );
+  }
+
+  Widget _buildCompanyPostCard(dynamic p) {
+    final title = (p['title'] ?? '') as String;
+    final description = (p['description'] ?? '') as String;
+    final location = (p['location'] ?? '') as String;
+    final createdAt = (p['createdAt'] ?? '') as String;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFF1B5E20), width: 2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title.isNotEmpty ? title : 'Untitled',
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1B5E20),
+              fontFamily: 'Trirong',
+            ),
+          ),
+          if (location.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              location,
+              style: const TextStyle(
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                color: Color(0xFF1B5E20),
+                fontFamily: 'Trirong',
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            description,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF1B5E20),
+              fontFamily: 'Trirong',
+            ),
+          ),
+          if (createdAt.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              createdAt,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.grey,
+                fontFamily: 'Trirong',
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCreatePostButton() {
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 50,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1B5E20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text(
+              'New Internship Ad',
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: 'Trirong',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            onPressed: () async {
+              final created = await Navigator.pushNamed(context, '/newpost_company');
+              if (created == true) {
+                _loadProfile();
+              }
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          height: 50,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1B5E20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            icon: const Icon(Icons.favorite, color: Colors.white),
+            label: const Text(
+              'Saved Candidates',
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: 'Trirong',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            onPressed: () {
+              Navigator.pushNamed(context, '/saved_listings_company');
+            },
+          ),
+        ),
+      ],
     );
   }
 
