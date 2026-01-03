@@ -217,30 +217,59 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
   Widget _buildAvailableInternshipsSection() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: SizedBox(
-        width: double.infinity,
-        height: 280,
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: const Color(0xFF1B5E20),
-              width: 2,
-            ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.all(16),
-          child: const Center(
-            child: Text(
-              'Available Internship ads',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1B5E20),
-                fontFamily: 'Trirong',
+      child: Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 150,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: const Color(0xFF1B5E20),
+                  width: 2,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.all(16),
+              child: const Center(
+                child: Text(
+                  'Available Internship ads',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B5E20),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              icon: const Icon(Icons.favorite, color: Colors.white),
+              label: const Text(
+                'Saved Candidates',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Trirong',
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onPressed: () {
+                Navigator.pushNamed(context, '/saved_listings_company');
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
