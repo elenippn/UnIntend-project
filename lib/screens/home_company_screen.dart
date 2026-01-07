@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../app_services.dart';
 import 'messages_company_screen.dart';
 import 'newpost_company_screen.dart';
+import '../models/company_candidate_dto.dart';
+import '../utils/api_error_message.dart';
+import '../utils/api_url.dart';
+import '../widgets/app_cached_image.dart';
 
 class HomeCompanyScreen extends StatefulWidget {
   const HomeCompanyScreen({super.key});
@@ -16,7 +20,7 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
 
   bool _isLoading = true;
   String? _error;
-  List<dynamic> _candidates = [];
+  List<CompanyCandidateDto> _candidates = [];
   final Set<int> _savedCandidateIds = {};
 
   final List<String> departments = [
@@ -32,17 +36,11 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     'Software Development',
   ];
 
-  int _extractStudentId(dynamic candidate) {
-    final raw = candidate['studentUserId'] ?? candidate['id'] ?? candidate['userId'];
-    if (raw is int) return raw;
-    return int.tryParse(raw?.toString() ?? '0') ?? 0;
-  }
-  
-  int? _extractStudentPostId(dynamic candidate) {
-    final raw = candidate['studentPostId'] ?? candidate['postId'];
-    if (raw is int) return raw;
-    return int.tryParse(raw?.toString() ?? '') ?? null;
-  }
+  int _extractStudentId(CompanyCandidateDto candidate) =>
+      candidate.studentUserId;
+
+  int? _extractStudentPostId(CompanyCandidateDto candidate) =>
+      candidate.studentPostId;
 
   @override
   void initState() {
@@ -61,9 +59,7 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
       if (!mounted) return;
       _savedCandidateIds
         ..clear()
-        ..addAll(data
-            .where((c) => (c['saved'] ?? false) == true)
-            .map<int>(_extractStudentId));
+        ..addAll(data.where((c) => c.saved).map<int>(_extractStudentId));
       setState(() {
         _candidates = data;
         _isLoading = false;
@@ -71,7 +67,7 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = friendlyApiError(e);
         _isLoading = false;
       });
     }
@@ -338,15 +334,23 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     );
   }
 
-  Widget _buildCandidateCard(dynamic candidate) {
+  Widget _buildCandidateCard(CompanyCandidateDto candidate) {
     final int studentUserId = _extractStudentId(candidate);
     final int? studentPostId = _extractStudentPostId(candidate);
-    final String name = (candidate['name'] ?? candidate['studentName'] ?? '') as String;
-    final String university = (candidate['university'] ?? '') as String;
-    final String department =
-        (candidate['department'] ?? candidate['major'] ?? candidate['skills'] ?? '') as String;
-    final String bio = (candidate['bio'] ?? candidate['description'] ?? '') as String;
-    final String skills = (candidate['skills'] ?? '') as String;
+    final String name = candidate.name;
+    final String university = candidate.university ?? '';
+    final String department = candidate.department ?? '';
+    final String bio = candidate.bio ?? '';
+    final String skills = candidate.skills ?? '';
+
+    final String? cardImageUrl = resolveApiUrl(
+      candidate.imageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
+    final String? profileImageUrl = resolveApiUrl(
+      candidate.studentProfileImageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
     final bool isSaved = _savedCandidateIds.contains(studentUserId);
     return Container(
       decoration: BoxDecoration(
@@ -372,12 +376,10 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
                     width: 1.5,
                   ),
                 ),
-                child: const Center(
-                  child: Icon(
-                    Icons.person,
-                    size: 18,
-                    color: Color(0xFF1B5E20),
-                  ),
+                child: AppProfileAvatar(
+                  imageUrl: profileImageUrl,
+                  size: 32,
+                  fallbackIcon: Icons.person,
                 ),
               ),
               const SizedBox(width: 8),
@@ -412,17 +414,11 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
+              AppCachedImage(
+                imageUrl: cardImageUrl,
                 width: 60,
                 height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.grey[400],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Icon(
-                  Icons.image,
-                  color: Color(0xFFBDBDBD),
-                ),
+                borderRadius: BorderRadius.circular(4),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -486,7 +482,8 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
                   isSaved ? Icons.favorite : Icons.favorite_outline,
                   color: const Color(0xFF1B5E20),
                 ),
-                onPressed: () => _toggleSave(studentUserId, studentPostId: studentPostId),
+                onPressed: () =>
+                    _toggleSave(studentUserId, studentPostId: studentPostId),
               ),
             ],
           ),

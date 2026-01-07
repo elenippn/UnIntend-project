@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart'; // άλλαξε path αν χρειάζεται
+import '../models/internship_post_dto.dart';
+import '../utils/api_error_message.dart';
+import '../utils/api_url.dart';
+import '../widgets/app_cached_image.dart';
 
 class HomeStudentScreen extends StatefulWidget {
   const HomeStudentScreen({super.key});
@@ -16,7 +20,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   String? _error;
 
   // Θα γεμίσει από backend (/feed/student)
-  List<dynamic> _internships = [];
+  List<InternshipPostDto> _internships = [];
 
   // Local "saved" state (για να αλλάζει το icon άμεσα)
   final Set<int> _savedPostIds = {};
@@ -55,14 +59,14 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
         _internships = data;
         _savedPostIds
           ..clear()
-          ..addAll(data.where((p) => (p['saved'] ?? false) == true).map<int>((p) => (p['id'] as int)));
+          ..addAll(data.where((p) => p.saved).map<int>((p) => p.id));
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _error = e.toString();
+        _error = friendlyApiError(e);
         _isLoading = false;
       });
     }
@@ -102,9 +106,11 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   // (προαιρετικό) like/pass με κουμπιά ή swipe later
   Future<void> _decide(int postId, String decision) async {
     // optimistic: remove card from UI
-    final index = _internships.indexWhere((p) => (p['id'] as int) == postId);
-    dynamic removed;
+    final index = _internships.indexWhere((p) => p.id == postId);
+    int? removedIndex;
+    InternshipPostDto? removed;
     if (index != -1) {
+      removedIndex = index;
       removed = _internships[index];
       setState(() {
         _internships.removeAt(index);
@@ -115,9 +121,12 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
       await AppServices.feed.decideOnPost(postId, decision);
     } catch (e) {
       // revert if failed
-      if (removed != null) {
+      final restored = removed;
+      final restoredIndex = removedIndex;
+      if (restored != null && restoredIndex != null) {
+        final safeIndex = restoredIndex.clamp(0, _internships.length);
         setState(() {
-          _internships.insert(index, removed);
+          _internships.insert(safeIndex, restored);
         });
       }
       if (!mounted) return;
@@ -127,7 +136,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     }
   }
 
-  List<dynamic> get _filteredInternships {
+  List<InternshipPostDto> get _filteredInternships {
     // ΠΡΟΣΟΧΗ: το backend feed δεν έχει department από default στο seed.
     // Οπότε εδώ κρατάμε το filter UI, αλλά δεν φιλτράρουμε πραγματικά
     // μέχρι να προσθέσουμε πεδίο department/tag στο backend.
@@ -344,13 +353,23 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     );
   }
 
-  Widget _buildInternshipCard(dynamic internship) {
-    // Expecting backend fields like: id, companyName, title, description, location
-    final int postId = (internship['id'] as int);
-    final String companyName = (internship['companyName'] ?? 'Company') as String;
-    final String title = (internship['title'] ?? '') as String;
-    final String description = (internship['description'] ?? '') as String;
-    final String location = (internship['location'] ?? '') as String;
+  Widget _buildInternshipCard(InternshipPostDto internship) {
+    final int postId = internship.id;
+    final String companyName = internship.companyName?.isNotEmpty == true
+        ? internship.companyName!
+        : 'Company';
+    final String title = internship.title;
+    final String description = internship.description;
+    final String location = internship.location ?? '';
+    final String? imageUrl = resolveApiUrl(
+      internship.imageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
+
+    final String? companyProfileImageUrl = resolveApiUrl(
+      internship.profileImageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
 
     final bool isSaved = _savedPostIds.contains(postId);
 
@@ -378,12 +397,10 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
                     width: 1.5,
                   ),
                 ),
-                child: const Center(
-                  child: Icon(
-                    Icons.person,
-                    size: 18,
-                    color: Color(0xFF1B5E20),
-                  ),
+                child: AppProfileAvatar(
+                  imageUrl: companyProfileImageUrl,
+                  size: 32,
+                  fallbackIcon: Icons.business,
                 ),
               ),
               const SizedBox(width: 8),
@@ -402,17 +419,11 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
+              AppCachedImage(
+                imageUrl: imageUrl,
                 width: 60,
                 height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.grey[400],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Icon(
-                  Icons.image,
-                  color: Color(0xFFBDBDBD),
-                ),
+                borderRadius: BorderRadius.circular(4),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -444,7 +455,8 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          const Icon(Icons.location_on, size: 14, color: Color(0xFF1B5E20)),
+                          const Icon(Icons.location_on,
+                              size: 14, color: Color(0xFF1B5E20)),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(

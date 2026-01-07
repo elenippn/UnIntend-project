@@ -1,10 +1,12 @@
 import 'api_client.dart';
+import '../models/internship_post_dto.dart';
+import '../models/profile_post_dto.dart';
 
 class PostsApi {
   final ApiClient client;
   PostsApi(this.client);
 
-  Future<Map<String, dynamic>> createCompanyPost({
+  Future<InternshipPostDto> createCompanyPost({
     required String title,
     required String description,
     String? location,
@@ -14,20 +16,34 @@ class PostsApi {
       'description': description,
       'location': location,
     });
-    return Map<String, dynamic>.from(res.data as Map);
+    return InternshipPostDto.fromJson(
+        Map<String, dynamic>.from(res.data as Map));
   }
 
-  Future<List<dynamic>> listMyCompanyPosts() async {
+  Future<List<InternshipPostDto>> listMyCompanyPosts() async {
     final res = await client.get('/posts/me');
-    return res.data as List<dynamic>;
+    final list = (res.data as List).cast<dynamic>();
+    return list
+        .map((e) =>
+            InternshipPostDto.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
   }
 
-  Future<List<dynamic>> listCompanyPostsForUser(int companyUserId) async {
+  Future<List<InternshipPostDto>> listCompanyPostsForUser(
+      int companyUserId) async {
     final res = await client.get('/posts/company/$companyUserId');
-    return res.data as List<dynamic>;
+    final list = (res.data as List).cast<dynamic>();
+    return list
+        .map((e) =>
+            InternshipPostDto.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
   }
 
-  Future<Map<String, dynamic>> createProfilePost({
+  Future<void> deleteCompanyPost(int postId) async {
+    await client.delete('/posts/$postId');
+  }
+
+  Future<ProfilePostDto> createProfilePost({
     required String title,
     required String description,
     String? category,
@@ -37,16 +53,29 @@ class PostsApi {
       'description': description,
       'category': category,
     });
-    return Map<String, dynamic>.from(res.data as Map);
+    return ProfilePostDto.fromJson(Map<String, dynamic>.from(res.data as Map));
   }
 
-  Future<List<dynamic>> listMyProfilePosts() async {
+  Future<List<ProfilePostDto>> listMyProfilePosts() async {
     final res = await client.get('/profile-posts/me');
-    return res.data as List<dynamic>;
+    final list = (res.data as List).cast<dynamic>();
+    return list
+        .map(
+            (e) => ProfilePostDto.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
   }
 
-  Future<List<dynamic>> listProfilePostsForStudent(int studentUserId) async {
+  Future<List<ProfilePostDto>> listProfilePostsForStudent(
+      int studentUserId) async {
     final res = await client.get('/profile-posts/$studentUserId');
-    return res.data as List<dynamic>;
+    final list = (res.data as List).cast<dynamic>();
+    return list
+        .map(
+            (e) => ProfilePostDto.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<void> deleteProfilePost(int postId) async {
+    await client.delete('/profile-posts/$postId');
   }
 }

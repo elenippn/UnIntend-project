@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
 import 'profile_edit_student_screen.dart';
+import '../models/auth_me_dto.dart';
+import '../models/profile_post_dto.dart';
+import '../utils/api_error_message.dart';
+import '../utils/api_url.dart';
+import '../widgets/app_cached_image.dart';
 
 class ProfileStudentScreen extends StatefulWidget {
   const ProfileStudentScreen({super.key});
@@ -12,8 +17,8 @@ class ProfileStudentScreen extends StatefulWidget {
 class _ProfileStudentScreenState extends State<ProfileStudentScreen> {
   bool _isLoading = true;
   String? _error;
-  Map<String, dynamic>? _profile;
-  List<dynamic> _profilePosts = const [];
+  AuthMeDto? _profile;
+  List<ProfilePostDto> _profilePosts = const [];
 
   @override
   void initState() {
@@ -38,7 +43,7 @@ class _ProfileStudentScreenState extends State<ProfileStudentScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = friendlyApiError(e);
         _isLoading = false;
       });
     }
@@ -176,10 +181,14 @@ class _ProfileStudentScreenState extends State<ProfileStudentScreen> {
   }
 
   Widget _buildUserInfo() {
-    final username = (_profile?['username'] ?? '') as String;
-    final name = (_profile?['name'] ?? '') as String;
-    final surname = (_profile?['surname'] ?? '') as String;
+    final username = _profile?.username ?? '';
+    final name = _profile?.name ?? '';
+    final surname = _profile?.surname ?? '';
     final displayUsername = username.isNotEmpty ? '@$username' : '@username';
+    final String? profileImageUrl = resolveApiUrl(
+      _profile?.profileImageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -196,12 +205,10 @@ class _ProfileStudentScreenState extends State<ProfileStudentScreen> {
                 width: 2,
               ),
             ),
-            child: const Center(
-              child: Icon(
-                Icons.person,
-                size: 40,
-                color: Color(0xFF1B5E20),
-              ),
+            child: AppProfileAvatar(
+              imageUrl: profileImageUrl,
+              size: 80,
+              fallbackIcon: Icons.person,
             ),
           ),
           const SizedBox(width: 16),
@@ -210,34 +217,34 @@ class _ProfileStudentScreenState extends State<ProfileStudentScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
-                    Text(
-                      displayUsername,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF1B5E20),
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
+                Text(
+                  displayUsername,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
                 const SizedBox(height: 8),
-                    Text(
-                      name.isNotEmpty ? name : 'Name',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1B5E20),
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      surname.isNotEmpty ? surname : 'Surname',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1B5E20),
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
+                Text(
+                  name.isNotEmpty ? name : 'Name',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  surname.isNotEmpty ? surname : 'Surname',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
               ],
             ),
           ),
@@ -269,9 +276,9 @@ class _ProfileStudentScreenState extends State<ProfileStudentScreen> {
   }
 
   Widget _buildAboutSection() {
-    final bio = (_profile?['bio'] ?? '') as String;
-    final studies = (_profile?['studies'] ?? '') as String;
-    final experience = (_profile?['experience'] ?? '') as String;
+    final bio = _profile?.bio ?? '';
+    final studies = _profile?.studies ?? '';
+    final experience = _profile?.experience ?? '';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -408,11 +415,15 @@ class _ProfileStudentScreenState extends State<ProfileStudentScreen> {
     );
   }
 
-  Widget _buildPostCard(dynamic p) {
-    final title = (p['title'] ?? '') as String;
-    final description = (p['description'] ?? '') as String;
-    final category = (p['category'] ?? '') as String;
-    final createdAt = (p['createdAt'] ?? '') as String;
+  Widget _buildPostCard(ProfilePostDto p) {
+    final title = p.title;
+    final description = p.description;
+    final category = p.category ?? '';
+    final createdAt = '';
+    final String? imageUrl = resolveApiUrl(
+      p.imageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
@@ -445,6 +456,13 @@ class _ProfileStudentScreenState extends State<ProfileStudentScreen> {
               ),
             ),
           ],
+          const SizedBox(height: 8),
+          AppCachedImage(
+            imageUrl: imageUrl,
+            width: double.infinity,
+            height: 160,
+            borderRadius: BorderRadius.circular(8),
+          ),
           const SizedBox(height: 8),
           Text(
             description,
@@ -493,7 +511,8 @@ class _ProfileStudentScreenState extends State<ProfileStudentScreen> {
               ),
             ),
             onPressed: () async {
-              final created = await Navigator.pushNamed(context, '/newpost_student');
+              final created =
+                  await Navigator.pushNamed(context, '/newpost_student');
               if (created == true) {
                 _loadProfile();
               }

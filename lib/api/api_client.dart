@@ -13,14 +13,16 @@ class ApiClient {
         ));
 
   Future<String?> getToken() => storage.read(key: 'token');
-  Future<void> setToken(String token) => storage.write(key: 'token', value: token);
+  Future<void> setToken(String token) =>
+      storage.write(key: 'token', value: token);
   Future<void> clearToken() => storage.delete(key: 'token');
 
   Future<Response<T>> get<T>(String path) async {
     final token = await getToken();
     return dio.get<T>(
       path,
-      options: Options(headers: token != null ? {'Authorization': 'Bearer $token'} : null),
+      options: Options(
+          headers: token != null ? {'Authorization': 'Bearer $token'} : null),
     );
   }
 
@@ -29,7 +31,8 @@ class ApiClient {
     return dio.post<T>(
       path,
       data: data,
-      options: Options(headers: token != null ? {'Authorization': 'Bearer $token'} : null),
+      options: Options(
+          headers: token != null ? {'Authorization': 'Bearer $token'} : null),
     );
   }
 
@@ -38,7 +41,34 @@ class ApiClient {
     return dio.put<T>(
       path,
       data: data,
-      options: Options(headers: token != null ? {'Authorization': 'Bearer $token'} : null),
+      options: Options(
+          headers: token != null ? {'Authorization': 'Bearer $token'} : null),
+    );
+  }
+
+  Future<Response<T>> delete<T>(String path) async {
+    final token = await getToken();
+    return dio.delete<T>(
+      path,
+      options: Options(
+          headers: token != null ? {'Authorization': 'Bearer $token'} : null),
+    );
+  }
+
+  Future<Response<T>> postMultipart<T>(
+    String path, {
+    required FormData data,
+  }) async {
+    final token = await getToken();
+    return dio.post<T>(
+      path,
+      data: data,
+      options: Options(
+        headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        contentType: 'multipart/form-data',
+      ),
     );
   }
 }

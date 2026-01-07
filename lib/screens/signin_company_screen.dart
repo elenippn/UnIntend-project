@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../app_services.dart';
 import 'signup_company_screen.dart';
 import 'home_company_screen.dart';
+import '../utils/api_error_message.dart';
 
 class SignInCompanyScreen extends StatefulWidget {
   const SignInCompanyScreen({super.key});
@@ -54,7 +55,8 @@ class _SignInCompanyScreenState extends State<SignInCompanyScreen> {
               const SizedBox(height: 40),
               _buildTextField('Email', _emailController),
               const SizedBox(height: 16),
-              _buildTextField('Password', _passwordController, isPassword: true),
+              _buildTextField('Password', _passwordController,
+                  isPassword: true),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -220,7 +222,7 @@ class _SignInCompanyScreenState extends State<SignInCompanyScreen> {
       final me = await AppServices.auth.getMe();
 
       if (!mounted) return;
-      final role = (me['role'] ?? '').toString().toUpperCase();
+      final role = (me.role ?? '').toUpperCase();
       if (role == 'COMPANY') {
         Navigator.pushReplacement(
           context,
@@ -236,7 +238,7 @@ class _SignInCompanyScreenState extends State<SignInCompanyScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Login failed: $e')),
+        SnackBar(content: Text('Login failed: ${friendlyApiError(e)}')),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
+import '../models/profile_post_dto.dart';
+import '../utils/api_error_message.dart';
+import '../utils/api_url.dart';
+import '../widgets/app_cached_image.dart';
 
 class ViewProfileStudentScreen extends StatefulWidget {
   final Map student;
@@ -7,11 +11,12 @@ class ViewProfileStudentScreen extends StatefulWidget {
   const ViewProfileStudentScreen({super.key, required this.student});
 
   @override
-  State<ViewProfileStudentScreen> createState() => _ViewProfileStudentScreenState();
+  State<ViewProfileStudentScreen> createState() =>
+      _ViewProfileStudentScreenState();
 }
 
 class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
-  List<dynamic> _posts = const [];
+  List<ProfilePostDto> _posts = const [];
   bool _loadingPosts = false;
   String? _postsError;
 
@@ -26,7 +31,8 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
     if (studentUserId == null) return;
     setState(() => _loadingPosts = true);
     try {
-      final res = await AppServices.posts.listProfilePostsForStudent(studentUserId);
+      final res =
+          await AppServices.posts.listProfilePostsForStudent(studentUserId);
       if (!mounted) return;
       setState(() {
         _posts = res;
@@ -37,7 +43,7 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
       if (!mounted) return;
       setState(() {
         _loadingPosts = false;
-        _postsError = e.toString();
+        _postsError = friendlyApiError(e);
       });
     }
   }
@@ -46,23 +52,22 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
   Widget build(BuildContext context) {
     final student = widget.student;
     final String username = (student['username'] ?? '') as String;
-    final String rawName = (
-      student['name'] ??
-      student['studentName'] ??
-      student['fullName'] ??
-      ''
-    ) as String;
+    final String rawName = (student['name'] ??
+        student['studentName'] ??
+        student['fullName'] ??
+        '') as String;
     final String firstName = (student['firstName'] ?? '') as String;
     final String lastName = (student['lastName'] ?? '') as String;
-    final String displayName = rawName.isNotEmpty
-        ? rawName
-        : '$firstName $lastName'.trim();
+    final String displayName =
+        rawName.isNotEmpty ? rawName : '$firstName $lastName'.trim();
     final String university = (student['university'] ?? '') as String;
-    final String department = (student['department'] ?? student['major'] ?? '') as String;
-    final String bio = (student['bio'] ?? student['description'] ?? '') as String;
-    final String experience = (student['experience'] ?? student['skills'] ?? '') as String;
-    final List<dynamic> posts =
-        _posts.isNotEmpty ? _posts : (student['posts'] ?? student['profilePosts'] ?? const []) as List<dynamic>;
+    final String department =
+        (student['department'] ?? student['major'] ?? '') as String;
+    final String bio =
+        (student['bio'] ?? student['description'] ?? '') as String;
+    final String experience =
+        (student['experience'] ?? student['skills'] ?? '') as String;
+    final List<ProfilePostDto> posts = _posts;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -73,12 +78,14 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
               SafeArea(bottom: false, child: _buildHeader(context)),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 32, left: 16, right: 16, top: 24),
+                  padding: const EdgeInsets.only(
+                      bottom: 32, left: 16, right: 16, top: 24),
                   child: Column(
                     children: [
                       _buildUserInfo(displayName, username),
                       const SizedBox(height: 20),
-                      _buildCard('About/Bio', bio.isNotEmpty ? bio : 'No bio provided'),
+                      _buildCard('About/Bio',
+                          bio.isNotEmpty ? bio : 'No bio provided'),
                       const SizedBox(height: 12),
                       _buildCard(
                         'Studies',
@@ -90,7 +97,9 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
                       const SizedBox(height: 12),
                       _buildCard(
                         'Experience',
-                        experience.isNotEmpty ? experience : 'No experience provided',
+                        experience.isNotEmpty
+                            ? experience
+                            : 'No experience provided',
                       ),
                       const SizedBox(height: 12),
                       if (_loadingPosts)
@@ -99,7 +108,8 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
                           child: CircularProgressIndicator(),
                         )
                       else if (_postsError != null)
-                        _buildCard('Posts', 'Could not load posts: $_postsError')
+                        _buildCard(
+                            'Posts', 'Could not load posts: $_postsError')
                       else
                         _buildPosts(posts),
                     ],
@@ -113,7 +123,7 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
     );
   }
 
-  Widget _buildPosts(List<dynamic> posts) {
+  Widget _buildPosts(List<ProfilePostDto> posts) {
     if (posts.isEmpty) {
       return _buildCard('Posts', 'No posts available');
     }
@@ -134,16 +144,16 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        ...posts.map((p) {
-          final String title = (p['title'] ?? p['name'] ?? 'Post') as String;
-          final String description = (p['description'] ?? '') as String;
-          return _buildPostCard(title, description);
-        }).toList(),
+        ...posts.map(_buildPostCard).toList(),
       ],
     );
   }
 
-  Widget _buildPostCard(String title, String description) {
+  Widget _buildPostCard(ProfilePostDto post) {
+    final String? imageUrl = resolveApiUrl(
+      post.imageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
@@ -156,7 +166,7 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            title,
+            post.title,
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -165,8 +175,15 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
             ),
           ),
           const SizedBox(height: 6),
+          AppCachedImage(
+            imageUrl: imageUrl,
+            width: double.infinity,
+            height: 160,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          const SizedBox(height: 6),
           Text(
-            description.isNotEmpty ? description : 'No description',
+            post.description.isNotEmpty ? post.description : 'No description',
             style: const TextStyle(
               fontSize: 13,
               color: Colors.black87,
@@ -212,7 +229,8 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
   }
 
   Widget _buildUserInfo(String name, String username) {
-    final String displayUsername = username.isNotEmpty ? '@$username' : '@username';
+    final String displayUsername =
+        username.isNotEmpty ? '@$username' : '@username';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
