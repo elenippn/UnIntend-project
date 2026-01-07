@@ -19,6 +19,9 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
   List<dynamic> _candidates = [];
   final Set<int> _savedCandidateIds = {};
 
+  // Κατάστασή για double-tap καρδιές (κόκκινες καρδιές)
+  final Set<int> _likedCandidateIds = {};
+
   final List<String> departments = [
     'Human Resources (HR)',
     'Marketing',
@@ -41,7 +44,7 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
   int? _extractStudentPostId(dynamic candidate) {
     final raw = candidate['studentPostId'] ?? candidate['postId'];
     if (raw is int) return raw;
-    return int.tryParse(raw?.toString() ?? '') ?? null;
+    return int.tryParse(raw?.toString() ?? '');
   }
 
   @override
@@ -480,13 +483,28 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
                 icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
                 onPressed: () => _decide(studentUserId, 'LIKE'),
               ),
-              IconButton(
-                tooltip: 'Save',
-                icon: Icon(
-                  isSaved ? Icons.favorite : Icons.favorite_outline,
-                  color: const Color(0xFF1B5E20),
+              GestureDetector(
+                onDoubleTap: () {
+                  setState(() {
+                    if (_likedCandidateIds.contains(studentUserId)) {
+                      _likedCandidateIds.remove(studentUserId);
+                    } else {
+                      _likedCandidateIds.add(studentUserId);
+                    }
+                  });
+                },
+                child: IconButton(
+                  tooltip: 'Save',
+                  icon: Icon(
+                    _likedCandidateIds.contains(studentUserId)
+                        ? Icons.favorite
+                        : (isSaved ? Icons.favorite : Icons.favorite_outline),
+                    color: _likedCandidateIds.contains(studentUserId)
+                        ? Colors.red
+                        : const Color(0xFF1B5E20),
+                  ),
+                  onPressed: () => _toggleSave(studentUserId, studentPostId: studentPostId),
                 ),
-                onPressed: () => _toggleSave(studentUserId, studentPostId: studentPostId),
               ),
             ],
           ),

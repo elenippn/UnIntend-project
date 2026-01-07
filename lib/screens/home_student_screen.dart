@@ -21,6 +21,9 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   // Local "saved" state (για να αλλάζει το icon άμεσα)
   final Set<int> _savedPostIds = {};
 
+  // Κατάστασή για double-tap καρδιές (κόκκινες καρδιές)
+  final Set<int> _likedPostIds = {};
+
   final List<String> departments = [
     'Human Resources (HR)',
     'Marketing',
@@ -495,13 +498,28 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
                 icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
                 onPressed: () => _decide(postId, "LIKE"),
               ),
-              IconButton(
-                tooltip: "Save",
-                icon: Icon(
-                  isSaved ? Icons.favorite : Icons.favorite_outline,
-                  color: const Color(0xFF1B5E20),
+              GestureDetector(
+                onDoubleTap: () {
+                  setState(() {
+                    if (_likedPostIds.contains(postId)) {
+                      _likedPostIds.remove(postId);
+                    } else {
+                      _likedPostIds.add(postId);
+                    }
+                  });
+                },
+                child: IconButton(
+                  tooltip: "Save",
+                  icon: Icon(
+                    _likedPostIds.contains(postId)
+                        ? Icons.favorite
+                        : (isSaved ? Icons.favorite : Icons.favorite_outline),
+                    color: _likedPostIds.contains(postId)
+                        ? Colors.red
+                        : const Color(0xFF1B5E20),
+                  ),
+                  onPressed: () => _toggleSave(postId),
                 ),
-                onPressed: () => _toggleSave(postId),
               ),
             ],
           ),

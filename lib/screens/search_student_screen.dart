@@ -21,12 +21,12 @@ class _SearchStudentScreenState extends State<SearchStudentScreen> {
           Column(
             children: [
               SafeArea(bottom: false, child: _buildStickyHeader()),
-              Expanded(
+              const Expanded(
                 child: SingleChildScrollView(
                   // ✅ ίδιο concept με Home: αφήνουμε “χώρο” για να μη καλύπτεται
-                  padding: const EdgeInsets.only(bottom: 100),
+                  padding: EdgeInsets.only(bottom: 100),
                   child: Column(
-                    children: const [
+                    children: [
                       // TODO: Results
                     ],
                   ),

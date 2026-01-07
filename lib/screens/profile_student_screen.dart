@@ -400,7 +400,7 @@ class _ProfileStudentScreenState extends State<ProfileStudentScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
-          ..._profilePosts.map((p) => _buildPostCard(p)).toList(),
+          ..._profilePosts.map((p) => _buildPostCard(p)),
           const SizedBox(height: 16),
           _buildCreatePostButton(),
         ],
