@@ -1,5 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import '../app_services.dart';
+import '../models/internship_post_dto.dart';
+import '../utils/api_error_message.dart';
+import '../utils/api_url.dart';
+import '../widgets/app_cached_image.dart';
 
 class ProfileEditCompanyScreen extends StatefulWidget {
   const ProfileEditCompanyScreen({super.key});
@@ -12,7 +20,8 @@ class ProfileEditCompanyScreen extends StatefulWidget {
 class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
   final TextEditingController _companyNameController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
-  final TextEditingController _internshipAdsController = TextEditingController();
+  final TextEditingController _internshipAdsController =
+      TextEditingController();
 
   // Track which fields are being edited
   bool _showBioInput = false;
@@ -22,11 +31,18 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
   String? _error;
   String? _username;
   String? _companyBio;
+  String? _profileImageUrl;
+  final ImagePicker _picker = ImagePicker();
+
+  bool _isPostsLoading = true;
+  String? _postsError;
+  List<InternshipPostDto> _myPosts = const [];
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadMyPosts();
   }
 
   @override
@@ -87,9 +103,213 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
         _buildUserEditInfo(),
         const SizedBox(height: 24),
         _buildAboutEditSection(),
+        const SizedBox(height: 16),
+        _buildPostsEditSection(),
         const SizedBox(height: 24),
       ],
     );
+  }
+
+  Widget _buildPostsEditSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: SizedBox(
+        width: double.infinity,
+        height: 280,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: const Color(0xFF1B5E20),
+              width: 2,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              const Text(
+                'Posts',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1B5E20),
+                  fontFamily: 'Trirong',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(child: _buildMyPostsBody()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMyPostsBody() {
+    if (_isPostsLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_postsError != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Failed to load posts',
+              style: TextStyle(
+                fontFamily: 'Trirong',
+                color: Color(0xFF1B5E20),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _loadMyPosts,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_myPosts.isEmpty) {
+      return const Center(
+        child: Text(
+          'No posts yet',
+          style: TextStyle(
+            fontFamily: 'Trirong',
+            color: Color(0xFF1B5E20),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      itemCount: _myPosts.length,
+      separatorBuilder: (context, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final p = _myPosts[index];
+        final String? imageUrl = resolveApiUrl(
+          p.imageUrl,
+          baseUrl: AppServices.baseUrl,
+        );
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFC9D3C9),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              AppCachedImage(
+                imageUrl: imageUrl,
+                width: 44,
+                height: 44,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      (p.title.isNotEmpty ? p.title : 'Untitled'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
+                    if ((p.location ?? '').trim().isNotEmpty)
+                      Text(
+                        p.location!.trim(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF1B5E20),
+                          fontFamily: 'Trirong',
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Delete',
+                icon: const Icon(Icons.delete, color: Color(0xFF1B5E20)),
+                onPressed: _isSaving ? null : () => _confirmDeletePost(p),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _loadMyPosts() async {
+    setState(() {
+      _isPostsLoading = true;
+      _postsError = null;
+    });
+
+    try {
+      final posts = await AppServices.posts.listMyCompanyPosts();
+      if (!mounted) return;
+      setState(() {
+        _myPosts = posts;
+        _isPostsLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _postsError = friendlyApiError(e);
+        _isPostsLoading = false;
+      });
+    }
+  }
+
+  Future<void> _confirmDeletePost(InternshipPostDto post) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete post?'),
+          content: const Text('This cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) return;
+
+    try {
+      await AppServices.posts.deleteCompanyPost(post.id);
+      if (!mounted) return;
+      setState(() {
+        _myPosts = _myPosts.where((p) => p.id != post.id).toList();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Post deleted')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyApiError(e))),
+      );
+    }
   }
 
   Widget _buildHeader() {
@@ -141,9 +361,13 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
   }
 
   Widget _buildUserEditInfo() {
-    final displayUsername = (_username?.isNotEmpty ?? false)
-        ? '@$_username'
-        : '@username';
+    final displayUsername =
+        (_username?.isNotEmpty ?? false) ? '@$_username' : '@username';
+
+    final String? resolvedProfileImageUrl = resolveApiUrl(
+      _profileImageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -163,14 +387,19 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
             ),
             child: Center(
               child: GestureDetector(
-                onTap: () {
-                  // TODO: Upload image
-                },
-                child: const Icon(
-                  Icons.add_a_photo,
-                  size: 32,
-                  color: Color(0xFF1B5E20),
-                ),
+                onTap: _pickAndUploadProfileImage,
+                child: (resolvedProfileImageUrl != null &&
+                        resolvedProfileImageUrl.trim().isNotEmpty)
+                    ? AppProfileAvatar(
+                        imageUrl: resolvedProfileImageUrl,
+                        size: 76,
+                        fallbackIcon: Icons.business,
+                      )
+                    : const Icon(
+                        Icons.add_a_photo,
+                        size: 32,
+                        color: Color(0xFF1B5E20),
+                      ),
               ),
             ),
           ),
@@ -180,14 +409,14 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
-                    Text(
-                      displayUsername,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF1B5E20),
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
+                Text(
+                  displayUsername,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Container(
                   padding:
@@ -233,15 +462,15 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              _buildEditableItem('Bio description', _bioController, _showBioInput,
-                  () {
+              _buildEditableItem(
+                  'Bio description', _bioController, _showBioInput, () {
                 setState(() {
                   _showBioInput = !_showBioInput;
                 });
               }),
               const SizedBox(height: 16),
-              _buildEditableItem('Available Internship ads', _internshipAdsController, _showInternshipAdsInput,
-                  () {
+              _buildEditableItem('Available Internship ads',
+                  _internshipAdsController, _showInternshipAdsInput, () {
                 setState(() {
                   _showInternshipAdsInput = !_showInternshipAdsInput;
                 });
@@ -313,8 +542,7 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF1B5E20),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 48, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(6),
             ),
@@ -352,9 +580,10 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
       final me = await AppServices.auth.getMe();
       if (!mounted) return;
       setState(() {
-        _username = (me['username'] ?? '') as String?;
-        _companyNameController.text = (me['companyName'] ?? me['name'] ?? '') as String;
-        _companyBio = (me['companyBio'] ?? me['bio'] ?? '') as String;
+        _username = me.username;
+        _profileImageUrl = me.profileImageUrl;
+        _companyNameController.text = (me.companyName ?? me.name);
+        _companyBio = (me.companyBio ?? me.bio ?? '');
         _bioController.text = _companyBio ?? '';
         _showBioInput = true;
         _showInternshipAdsInput = true;
@@ -363,9 +592,61 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = friendlyApiError(e);
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _pickAndUploadProfileImage() async {
+    if (_isLoading || _isSaving) return;
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Gallery'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Camera'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null) return;
+
+    try {
+      final picked = await _picker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
+      if (picked == null) return;
+
+      final file = File(picked.path);
+      await AppServices.media.uploadMyProfileImage(file);
+      await _loadProfile();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile image updated')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyApiError(e))),
+      );
     }
   }
 
@@ -373,8 +654,8 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
     setState(() => _isSaving = true);
     try {
       await AppServices.auth.updateMe(
-        companyName: _companyNameController.text.trim(),
-        companyBio: _bioController.text.trim(),
+        companyName: _companyNameController.text,
+        companyBio: _bioController.text,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -382,9 +663,18 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
       );
       Navigator.pop(context, true);
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint('updateMe(company) failed: $e');
+        try {
+          // ignore: avoid_print
+          print((e as dynamic).response?.data);
+        } catch (_) {
+          // ignore
+        }
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $e')),
+        SnackBar(content: Text(friendlyApiError(e))),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);

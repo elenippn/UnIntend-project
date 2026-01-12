@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
+import '../utils/api_error_message.dart';
+import '../utils/image_pick.dart';
+import 'dart:io';
 
 class NewPostStudentScreen extends StatefulWidget {
   const NewPostStudentScreen({super.key});
@@ -13,6 +16,7 @@ class _NewPostStudentScreenState extends State<NewPostStudentScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _categoryController = TextEditingController();
   bool _isSubmitting = false;
+  File? _selectedImage;
 
   @override
   Widget build(BuildContext context) {
@@ -44,9 +48,7 @@ class _NewPostStudentScreenState extends State<NewPostStudentScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             GestureDetector(
-                              onTap: () {
-                                // TODO: Upload image
-                              },
+                              onTap: _pickImage,
                               child: Container(
                                 width: 100,
                                 height: 100,
@@ -54,11 +56,21 @@ class _NewPostStudentScreenState extends State<NewPostStudentScreen> {
                                   color: Colors.grey[300],
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(
-                                  Icons.image,
-                                  color: Color(0xFFBDBDBD),
-                                  size: 50,
-                                ),
+                                child: _selectedImage != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.file(
+                                          _selectedImage!,
+                                          width: 100,
+                                          height: 100,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.image,
+                                        color: Color(0xFFBDBDBD),
+                                        size: 50,
+                                      ),
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -180,7 +192,8 @@ class _NewPostStudentScreenState extends State<NewPostStudentScreen> {
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
                       : const Text(
@@ -340,11 +353,16 @@ class _NewPostStudentScreenState extends State<NewPostStudentScreen> {
 
     setState(() => _isSubmitting = true);
     try {
-      await AppServices.posts.createProfilePost(
+      final created = await AppServices.posts.createProfilePost(
         title: title,
         description: description,
         category: category,
       );
+
+      final image = _selectedImage;
+      if (image != null) {
+        await AppServices.media.uploadProfilePostImage(created.id, image);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Post created')),
@@ -353,10 +371,25 @@ class _NewPostStudentScreenState extends State<NewPostStudentScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Post failed: $e')),
+        SnackBar(content: Text(friendlyApiError(e))),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _pickImage() async {
+    if (_isSubmitting) return;
+    try {
+      final file = await ImagePick.pickImageFile(context: context);
+      if (file == null) return;
+      if (!mounted) return;
+      setState(() => _selectedImage = file);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyApiError(e))),
+      );
     }
   }
 }

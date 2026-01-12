@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
 import 'profile_edit_company_screen.dart';
+import '../models/auth_me_dto.dart';
+import '../models/internship_post_dto.dart';
+import '../utils/api_error_message.dart';
+import '../utils/api_url.dart';
+import '../widgets/app_cached_image.dart';
 
 class ProfileCompanyScreen extends StatefulWidget {
   const ProfileCompanyScreen({super.key});
@@ -12,8 +17,8 @@ class ProfileCompanyScreen extends StatefulWidget {
 class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
   bool _isLoading = true;
   String? _error;
-  Map<String, dynamic>? _profile;
-  List<dynamic> _companyPosts = const [];
+  AuthMeDto? _profile;
+  List<InternshipPostDto> _companyPosts = const [];
 
   @override
   void initState() {
@@ -38,7 +43,7 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = friendlyApiError(e);
         _isLoading = false;
       });
     }
@@ -176,9 +181,13 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
   }
 
   Widget _buildUserInfo() {
-    final username = (_profile?['username'] ?? '') as String;
-    final companyName = (_profile?['companyName'] ?? _profile?['name'] ?? '') as String;
+    final username = _profile?.username ?? '';
+    final companyName = (_profile?.companyName ?? _profile?.name ?? '');
     final displayUsername = username.isNotEmpty ? '@$username' : '@username';
+    final String? profileImageUrl = resolveApiUrl(
+      _profile?.profileImageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -195,12 +204,10 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
                 width: 2,
               ),
             ),
-            child: const Center(
-              child: Icon(
-                Icons.business,
-                size: 40,
-                color: Color(0xFF1B5E20),
-              ),
+            child: AppProfileAvatar(
+              imageUrl: profileImageUrl,
+              size: 80,
+              fallbackIcon: Icons.business,
             ),
           ),
           const SizedBox(width: 16),
@@ -209,24 +216,24 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
-                    Text(
-                      displayUsername,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF1B5E20),
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
+                Text(
+                  displayUsername,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
                 const SizedBox(height: 8),
-                    Text(
-                      companyName.isNotEmpty ? companyName : 'Company Name',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1B5E20),
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
+                Text(
+                  companyName.isNotEmpty ? companyName : 'Company Name',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
               ],
             ),
           ),
@@ -258,7 +265,7 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
   }
 
   Widget _buildAboutSection() {
-    final bio = (_profile?['companyBio'] ?? _profile?['bio'] ?? '') as String;
+    final bio = _profile?.companyBio ?? _profile?.bio ?? '';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -358,11 +365,15 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
     );
   }
 
-  Widget _buildCompanyPostCard(dynamic p) {
-    final title = (p['title'] ?? '') as String;
-    final description = (p['description'] ?? '') as String;
-    final location = (p['location'] ?? '') as String;
-    final createdAt = (p['createdAt'] ?? '') as String;
+  Widget _buildCompanyPostCard(InternshipPostDto p) {
+    final title = p.title;
+    final description = p.description;
+    final location = p.location ?? '';
+    final createdAt = '';
+    final String? imageUrl = resolveApiUrl(
+      p.imageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
@@ -395,6 +406,13 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
               ),
             ),
           ],
+          const SizedBox(height: 8),
+          AppCachedImage(
+            imageUrl: imageUrl,
+            width: double.infinity,
+            height: 160,
+            borderRadius: BorderRadius.circular(8),
+          ),
           const SizedBox(height: 8),
           Text(
             description,
@@ -443,7 +461,8 @@ class _ProfileCompanyScreenState extends State<ProfileCompanyScreen> {
               ),
             ),
             onPressed: () async {
-              final created = await Navigator.pushNamed(context, '/newpost_company');
+              final created =
+                  await Navigator.pushNamed(context, '/newpost_company');
               if (created == true) {
                 _loadProfile();
               }

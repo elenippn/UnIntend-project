@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
+import '../utils/api_error_message.dart';
+import '../utils/image_pick.dart';
+import '../utils/internship_departments.dart';
+import 'dart:io';
 
 class NewPostCompanyScreen extends StatefulWidget {
   const NewPostCompanyScreen({super.key});
@@ -15,17 +19,7 @@ class _NewPostCompanyScreenState extends State<NewPostCompanyScreen> {
   final TextEditingController _locationController = TextEditingController();
   String? _selectedDepartment;
   bool _isSubmitting = false;
-
-  final List<String> _departments = [
-    'Engineering',
-    'Marketing',
-    'Sales',
-    'Human Resources',
-    'Finance',
-    'Operations',
-    'Product',
-    'Design',
-  ];
+  File? _selectedImage;
 
   @override
   Widget build(BuildContext context) {
@@ -57,9 +51,7 @@ class _NewPostCompanyScreenState extends State<NewPostCompanyScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             GestureDetector(
-                              onTap: () {
-                                // TODO: Upload image
-                              },
+                              onTap: _pickImage,
                               child: Container(
                                 width: 100,
                                 height: 100,
@@ -67,11 +59,21 @@ class _NewPostCompanyScreenState extends State<NewPostCompanyScreen> {
                                   color: Colors.grey[300],
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(
-                                  Icons.add_photo_alternate,
-                                  color: Color(0xFFBDBDBD),
-                                  size: 50,
-                                ),
+                                child: _selectedImage != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.file(
+                                          _selectedImage!,
+                                          width: 100,
+                                          height: 100,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.add_photo_alternate,
+                                        color: Color(0xFFBDBDBD),
+                                        size: 50,
+                                      ),
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -132,7 +134,8 @@ class _NewPostCompanyScreenState extends State<NewPostCompanyScreen> {
                             isExpanded: true,
                             value: _selectedDepartment,
                             hint: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
                               child: Text(
                                 'Select Department',
                                 style: TextStyle(
@@ -142,11 +145,12 @@ class _NewPostCompanyScreenState extends State<NewPostCompanyScreen> {
                               ),
                             ),
                             underline: const SizedBox(),
-                            items: _departments.map((String value) {
+                            items: internshipDepartments.map((String value) {
                               return DropdownMenuItem<String>(
                                 value: value,
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12),
                                   child: Text(
                                     value,
                                     style: const TextStyle(
@@ -246,7 +250,8 @@ class _NewPostCompanyScreenState extends State<NewPostCompanyScreen> {
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
                       : const Text(
@@ -407,11 +412,16 @@ class _NewPostCompanyScreenState extends State<NewPostCompanyScreen> {
 
     setState(() => _isSubmitting = true);
     try {
-      await AppServices.posts.createCompanyPost(
+      final created = await AppServices.posts.createCompanyPost(
         title: title,
         description: description,
         location: location,
       );
+
+      final image = _selectedImage;
+      if (image != null) {
+        await AppServices.media.uploadInternshipPostImage(created.id, image);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Post created')),
@@ -420,10 +430,25 @@ class _NewPostCompanyScreenState extends State<NewPostCompanyScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Post failed: $e')),
+        SnackBar(content: Text(friendlyApiError(e))),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _pickImage() async {
+    if (_isSubmitting) return;
+    try {
+      final file = await ImagePick.pickImageFile(context: context);
+      if (file == null) return;
+      if (!mounted) return;
+      setState(() => _selectedImage = file);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyApiError(e))),
+      );
     }
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '/app_services.dart'; 
+import '/app_services.dart';
+import '../utils/api_error_message.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -48,7 +49,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
       if (!context.mounted) return;
 
-      final role = (me['role'] ?? '').toString().toUpperCase();
+      final role = (me.role ?? '').toUpperCase();
       if (role == 'STUDENT') {
         Navigator.of(context).pushReplacementNamed('/home_student');
       } else if (role == 'COMPANY') {
@@ -62,7 +63,7 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Login failed: $e")),
+        SnackBar(content: Text("Login failed: ${friendlyApiError(e)}")),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);

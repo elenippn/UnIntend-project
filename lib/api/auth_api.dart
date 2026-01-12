@@ -1,8 +1,15 @@
 import 'api_client.dart';
+import '../models/auth_me_dto.dart';
 
 class AuthApi {
   final ApiClient client;
   AuthApi(this.client);
+
+  String? _normalizeOptional(String? value) {
+    if (value == null) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
 
   Future<void> login(String usernameOrEmail, String password) async {
     final res = await client.post('/auth/login', data: {
@@ -33,9 +40,9 @@ class AuthApi {
     await client.setToken(token);
   }
 
-  Future<Map<String, dynamic>> getMe() async {
+  Future<AuthMeDto> getMe() async {
     final res = await client.get('/auth/me');
-    return Map<String, dynamic>.from(res.data as Map);
+    return AuthMeDto.fromJson(Map<String, dynamic>.from(res.data as Map));
   }
 
   Future<Map<String, dynamic>> updateMe({
@@ -43,18 +50,20 @@ class AuthApi {
     String? surname,
     String? bio,
     String? studies,
+    String? skills,
     String? experience,
     String? companyName,
     String? companyBio,
   }) async {
     final payload = <String, dynamic>{
-      "name": name,
-      "surname": surname,
-      "bio": bio,
-      "studies": studies,
-      "experience": experience,
-      "companyName": companyName,
-      "companyBio": companyBio,
+      "name": _normalizeOptional(name),
+      "surname": _normalizeOptional(surname),
+      "bio": _normalizeOptional(bio),
+      "studies": _normalizeOptional(studies),
+      "skills": _normalizeOptional(skills),
+      "experience": _normalizeOptional(experience),
+      "companyName": _normalizeOptional(companyName),
+      "companyBio": _normalizeOptional(companyBio),
     }..removeWhere((key, value) => value == null);
 
     final res = await client.put('/auth/me', data: payload);
