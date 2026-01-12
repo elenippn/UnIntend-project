@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../app_services.dart';
 import '../utils/api_error_message.dart';
 import '../utils/image_pick.dart';
+import '../utils/internship_departments.dart';
 import 'dart:io';
 
 class NewPostCompanyScreen extends StatefulWidget {
@@ -19,17 +20,6 @@ class _NewPostCompanyScreenState extends State<NewPostCompanyScreen> {
   String? _selectedDepartment;
   bool _isSubmitting = false;
   File? _selectedImage;
-
-  final List<String> _departments = [
-    'Engineering',
-    'Marketing',
-    'Sales',
-    'Human Resources',
-    'Finance',
-    'Operations',
-    'Product',
-    'Design',
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -155,7 +145,7 @@ class _NewPostCompanyScreenState extends State<NewPostCompanyScreen> {
                               ),
                             ),
                             underline: const SizedBox(),
-                            items: _departments.map((String value) {
+                            items: internshipDepartments.map((String value) {
                               return DropdownMenuItem<String>(
                                 value: value,
                                 child: Padding(

@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import '../app_services.dart';
 import 'camera_screen.dart';
 import 'add_file_screen.dart';
+import '../utils/application_status.dart';
+import 'dart:async';
 
 class ChatScreen extends StatefulWidget {
   final int conversationId;
   final String title;
+  final String contextLine;
   final String subtitle;
   final bool canSend;
 
@@ -13,6 +16,7 @@ class ChatScreen extends StatefulWidget {
     super.key,
     required this.conversationId,
     required this.title,
+    this.contextLine = '',
     required this.subtitle,
     required this.canSend,
   });
@@ -28,10 +32,126 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _error;
   List<dynamic> _messages = [];
 
+  late String _subtitle;
+  late bool _canSend;
+  Timer? _statusPollTimer;
+  bool _didRefreshAfterResolve = false;
+
   @override
   void initState() {
     super.initState();
+    _subtitle = widget.subtitle;
+    _canSend = widget.canSend;
+    AppServices.events.addListener(_onApplicationsChanged);
+    _markReadAndRefresh();
     _loadMessages();
+    _startStatusPollingIfNeeded();
+  }
+
+  Future<void> _markReadAndRefresh() async {
+    if (widget.conversationId == 0) return;
+    try {
+      await AppServices.chat.markConversationRead(widget.conversationId);
+    } catch (_) {
+      // best effort
+    }
+
+    // Ensure lists refresh unreadCount immediately.
+    AppServices.events.applicationsChanged();
+  }
+
+  @override
+  void dispose() {
+    _statusPollTimer?.cancel();
+    AppServices.events.removeListener(_onApplicationsChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onApplicationsChanged() {
+    if (!mounted) return;
+    // Force a quick refresh so the latest system message appears.
+    _loadMessages();
+    _startStatusPollingIfNeeded();
+  }
+
+  void _startStatusPollingIfNeeded() {
+    if (_canSend) return;
+    _statusPollTimer?.cancel();
+    _statusPollTimer = Timer.periodic(const Duration(seconds: 6), (_) async {
+      if (!mounted) return;
+      final app = await AppServices.applications.getByConversationId(
+        widget.conversationId,
+      );
+      if (!mounted || app == null) return;
+
+      final statusRaw = (app['status'] ?? '').toString();
+      final normalized = normalizeApplicationStatus(statusRaw);
+      final display = displayApplicationStatus(statusRaw);
+
+      final nextCanSend = normalized == 'ACCEPTED';
+      final nextSubtitle = display.isNotEmpty ? display : _subtitle;
+
+      if (nextCanSend != _canSend || nextSubtitle != _subtitle) {
+        setState(() {
+          _canSend = nextCanSend;
+          _subtitle = nextSubtitle;
+        });
+      }
+
+      // Stop polling once resolved.
+      if (normalized != 'PENDING') {
+        if (!_didRefreshAfterResolve) {
+          _didRefreshAfterResolve = true;
+          _loadMessages();
+        }
+        _statusPollTimer?.cancel();
+        _statusPollTimer = null;
+      } else {
+        // Fallback: backend may update conversation system message before
+        // applications status (LIKE->PASS). Try to infer resolved state.
+        await _tryResolveFromConversationMessages();
+      }
+    });
+  }
+
+  Future<void> _tryResolveFromConversationMessages() async {
+    try {
+      final messages =
+          await AppServices.chat.getMessages(widget.conversationId);
+      String? lastSystemText;
+      for (var i = messages.length - 1; i >= 0; i--) {
+        final m = messages[i];
+        if (m is! Map) continue;
+        final bool isSystem = (m['isSystem'] == true) ||
+            (m['type']?.toString().toUpperCase() == 'SYSTEM');
+        if (!isSystem) continue;
+        final txt = (m['text'] ?? m['message'] ?? '').toString();
+        if (txt.trim().isEmpty) continue;
+        lastSystemText = txt;
+        break;
+      }
+
+      final inferred = inferStatusFromSystemText(lastSystemText);
+      if (inferred == null || inferred == 'PENDING') return;
+
+      if (!mounted) return;
+      setState(() {
+        _canSend = inferred == 'ACCEPTED';
+        _subtitle = displayApplicationStatus(inferred);
+      });
+
+      if (!_didRefreshAfterResolve) {
+        _didRefreshAfterResolve = true;
+        _messages = messages;
+        _loadingMessages = false;
+      }
+
+      _statusPollTimer?.cancel();
+      _statusPollTimer = null;
+    } catch (_) {
+      // ignore
+    }
   }
 
   Future<void> _loadMessages() async {
@@ -46,6 +166,9 @@ class _ChatScreenState extends State<ChatScreen> {
         _messages = data;
         _loadingMessages = false;
       });
+
+      // Also update status from latest system message if present.
+      await _tryResolveFromConversationMessages();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -59,7 +182,6 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-
       body: Stack(
         children: [
           // Tap detector για να κλείσει το menu
@@ -76,7 +198,6 @@ class _ChatScreenState extends State<ChatScreen> {
           Column(
             children: [
               SafeArea(bottom: false, child: _buildHeader()),
-
               Expanded(child: _buildMessagesList()),
             ],
           ),
@@ -102,6 +223,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildHeader() {
+    final headerTitle =
+        widget.title.trim().isNotEmpty ? widget.title : 'UnIntern';
+    final contextLine = widget.contextLine.trim();
     return Container(
       color: const Color(0xFFFAFD9F),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -112,14 +236,17 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               GestureDetector(
                 onTap: () => Navigator.pop(context),
-                child: const Icon(Icons.arrow_back, color: Color(0xFF1B5E20), size: 28),
+                child: const Icon(Icons.arrow_back,
+                    color: Color(0xFF1B5E20), size: 28),
               ),
-              const Expanded(
+              Expanded(
                 child: Center(
                   child: Text(
-                    'UnIntern',
-                    style: TextStyle(
-                      fontSize: 24,
+                    headerTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF1B5E20),
                       fontFamily: 'Trirong',
@@ -130,9 +257,22 @@ class _ChatScreenState extends State<ChatScreen> {
               const SizedBox(width: 28),
             ],
           ),
+          if (contextLine.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              contextLine,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF1B5E20),
+                fontFamily: 'Trirong',
+              ),
+            ),
+          ],
           const SizedBox(height: 6),
           Text(
-            widget.subtitle,
+            _subtitle,
             style: const TextStyle(
               fontSize: 12,
               color: Color(0xFF1B5E20),
@@ -196,22 +336,25 @@ class _ChatScreenState extends State<ChatScreen> {
 
           // send
           GestureDetector(
-            onTap: widget.canSend ? _send : () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Conversation not accepted yet')),
-              );
-            },
+            onTap: _canSend
+                ? _send
+                : () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Conversation not accepted yet')),
+                    );
+                  },
             child: Container(
               width: 44,
               height: 44,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFF1B5E20), width: 2),
-                color: widget.canSend ? const Color(0xFFFAFD9F) : Colors.grey[300],
+                color: _canSend ? const Color(0xFFFAFD9F) : Colors.grey[300],
               ),
               child: Icon(
                 Icons.send,
-                color: widget.canSend ? const Color(0xFF1B5E20) : Colors.grey,
+                color: _canSend ? const Color(0xFF1B5E20) : Colors.grey,
                 size: 20,
               ),
             ),
@@ -304,7 +447,8 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Text(
                 'Failed to load messages:\n$_error',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontFamily: 'Trirong', color: Color(0xFF1B5E20)),
+                style: const TextStyle(
+                    fontFamily: 'Trirong', color: Color(0xFF1B5E20)),
               ),
             ),
             ElevatedButton(
@@ -348,7 +492,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _send() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || !widget.canSend) return;
+    if (text.isEmpty || !_canSend) return;
 
     setState(() {
       _messages.add({
@@ -374,7 +518,8 @@ class _ChatBubble extends StatelessWidget {
   final bool isMe;
   final bool isSystem;
 
-  const _ChatBubble({required this.text, required this.isMe, this.isSystem = false});
+  const _ChatBubble(
+      {required this.text, required this.isMe, this.isSystem = false});
 
   @override
   Widget build(BuildContext context) {
@@ -404,9 +549,8 @@ class _ChatBubble extends StatelessWidget {
       );
     }
 
-    final bubbleColor = isMe
-        ? const Color(0xFFFAFD9F)
-        : const Color(0xFFC9D3C9);
+    final bubbleColor =
+        isMe ? const Color(0xFFFAFD9F) : const Color(0xFFC9D3C9);
     final align = isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start;
 
     return Column(

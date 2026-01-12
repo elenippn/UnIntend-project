@@ -3,6 +3,7 @@ import '../app_services.dart'; // άλλαξε path αν χρειάζεται
 import '../models/internship_post_dto.dart';
 import '../utils/api_error_message.dart';
 import '../utils/api_url.dart';
+import '../utils/internship_departments.dart';
 import '../widgets/app_cached_image.dart';
 
 class HomeStudentScreen extends StatefulWidget {
@@ -25,18 +26,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   // Local "saved" state (για να αλλάζει το icon άμεσα)
   final Set<int> _savedPostIds = {};
 
-  final List<String> departments = [
-    'Human Resources (HR)',
-    'Marketing',
-    'Public Relations (PR)',
-    'Sales',
-    'Legal Department',
-    'IT',
-    'Supply Chain',
-    'Data Analytics',
-    'Product Management',
-    'Software Development',
-  ];
+  final List<String> departments = internshipDepartments;
 
   @override
   void initState() {
@@ -119,6 +109,12 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
 
     try {
       await AppServices.feed.decideOnPost(postId, decision);
+
+      // Spec: after LIKE, refresh /applications so Messages/Chat can show
+      // pending/declined immediately. For PASS we do nothing (no chat created).
+      if (decision.toUpperCase() == 'LIKE') {
+        AppServices.events.applicationsChanged();
+      }
     } catch (e) {
       // revert if failed
       final restored = removed;
@@ -373,151 +369,155 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
 
     final bool isSaved = _savedPostIds.contains(postId);
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: const Color(0xFF0D3B1A),
-          width: 2.5,
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onDoubleTap: () => _toggleSave(postId),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: const Color(0xFF0D3B1A),
+            width: 2.5,
+          ),
+          borderRadius: BorderRadius.circular(12),
         ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFF1B5E20),
-                    width: 1.5,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF1B5E20),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: AppProfileAvatar(
+                    imageUrl: companyProfileImageUrl,
+                    size: 32,
+                    fallbackIcon: Icons.business,
                   ),
                 ),
-                child: AppProfileAvatar(
-                  imageUrl: companyProfileImageUrl,
-                  size: 32,
-                  fallbackIcon: Icons.business,
+                const SizedBox(width: 8),
+                Text(
+                  companyName,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                companyName,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1B5E20),
-                  fontFamily: 'Trirong',
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppCachedImage(
+                  imageUrl: imageUrl,
+                  width: 60,
+                  height: 60,
+                  borderRadius: BorderRadius.circular(4),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AppCachedImage(
-                imageUrl: imageUrl,
-                width: 60,
-                height: 60,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (title.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1B5E20),
-                            fontFamily: 'Trirong',
-                          ),
-                        ),
-                      ),
-                    Text(
-                      description,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF1B5E20),
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
-                    if (location.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on,
-                              size: 14, color: Color(0xFF1B5E20)),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              location,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF1B5E20),
-                                fontFamily: 'Trirong',
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (title.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1B5E20),
+                              fontFamily: 'Trirong',
                             ),
                           ),
-                        ],
+                        ),
+                      Text(
+                        description,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF1B5E20),
+                          fontFamily: 'Trirong',
+                        ),
                       ),
-                    ],
-                    const SizedBox(height: 8),
-                    Row(
-                      children: List.generate(
-                        3,
-                        (i) => Expanded(
-                          child: Container(
-                            height: 4,
-                            margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
-                            color: Colors.grey[400],
+                      if (location.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on,
+                                size: 14, color: Color(0xFF1B5E20)),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                location,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF1B5E20),
+                                  fontFamily: 'Trirong',
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: List.generate(
+                          3,
+                          (i) => Expanded(
+                            child: Container(
+                              height: 4,
+                              margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
+                              color: Colors.grey[400],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+              ],
+            ),
+            const SizedBox(height: 12),
 
-          // Actions row (προσωρινό like/pass + save)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              IconButton(
-                tooltip: "Pass",
-                icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
-                onPressed: () => _decide(postId, "PASS"),
-              ),
-              IconButton(
-                tooltip: "Like",
-                icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
-                onPressed: () => _decide(postId, "LIKE"),
-              ),
-              IconButton(
-                tooltip: "Save",
-                icon: Icon(
-                  isSaved ? Icons.favorite : Icons.favorite_outline,
-                  color: const Color(0xFF1B5E20),
+            // Actions row (προσωρινό like/pass + save)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  tooltip: "Pass",
+                  icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
+                  onPressed: () => _decide(postId, "PASS"),
                 ),
-                onPressed: () => _toggleSave(postId),
-              ),
-            ],
-          ),
-        ],
+                IconButton(
+                  tooltip: "Like",
+                  icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
+                  onPressed: () => _decide(postId, "LIKE"),
+                ),
+                IconButton(
+                  tooltip: "Save",
+                  icon: Icon(
+                    isSaved ? Icons.favorite : Icons.favorite_outline,
+                    color: const Color(0xFF1B5E20),
+                  ),
+                  onPressed: () => _toggleSave(postId),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

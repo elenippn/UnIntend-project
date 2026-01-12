@@ -6,11 +6,18 @@ import 'api/chat_api.dart';
 import 'api/saves_api.dart';
 import 'api/posts_api.dart';
 import 'api/media_api.dart';
+import 'api/profiles_api.dart';
+import 'utils/app_events.dart';
 import 'package:flutter/foundation.dart';
 
 class AppServices {
+  static const String _apiBaseUrlOverride =
+      String.fromEnvironment('API_BASE_URL');
+
   static String get baseUrl {
-    if (kIsWeb) return 'http://localhost:8000';
+    if (_apiBaseUrlOverride.isNotEmpty) return _apiBaseUrlOverride;
+
+    if (kIsWeb) return 'http://${Uri.base.host}:8000';
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -29,4 +36,7 @@ class AppServices {
   static final SavesApi saves = SavesApi(client);
   static final PostsApi posts = PostsApi(client);
   static final MediaApi media = MediaApi(client);
+  static final ProfilesApi profiles = ProfilesApi(client);
+
+  static final AppEvents events = AppEvents();
 }

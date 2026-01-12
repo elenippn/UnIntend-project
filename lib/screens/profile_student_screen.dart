@@ -278,6 +278,7 @@ class _ProfileStudentScreenState extends State<ProfileStudentScreen> {
   Widget _buildAboutSection() {
     final bio = _profile?.bio ?? '';
     final studies = _profile?.studies ?? '';
+    final skills = _profile?.skills ?? '';
     final experience = _profile?.experience ?? '';
 
     return Padding(
@@ -327,6 +328,25 @@ class _ProfileStudentScreenState extends State<ProfileStudentScreen> {
             const SizedBox(height: 8),
             Text(
               studies.isNotEmpty ? studies : 'No studies info',
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF1B5E20),
+                fontFamily: 'Trirong',
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Skills',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1B5E20),
+                fontFamily: 'Trirong',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              skills.isNotEmpty ? skills : 'No skills info',
               style: const TextStyle(
                 fontSize: 13,
                 color: Color(0xFF1B5E20),

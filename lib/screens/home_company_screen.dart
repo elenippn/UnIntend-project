@@ -5,6 +5,7 @@ import 'newpost_company_screen.dart';
 import '../models/company_candidate_dto.dart';
 import '../utils/api_error_message.dart';
 import '../utils/api_url.dart';
+import '../utils/internship_departments.dart';
 import '../widgets/app_cached_image.dart';
 
 class HomeCompanyScreen extends StatefulWidget {
@@ -23,18 +24,7 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
   List<CompanyCandidateDto> _candidates = [];
   final Set<int> _savedCandidateIds = {};
 
-  final List<String> departments = [
-    'Human Resources (HR)',
-    'Marketing',
-    'Public Relations (PR)',
-    'Sales',
-    'Legal Department',
-    'IT',
-    'Supply Chain',
-    'Data Analytics',
-    'Product Management',
-    'Software Development',
-  ];
+  final List<String> departments = internshipDepartments;
 
   int _extractStudentId(CompanyCandidateDto candidate) =>
       candidate.studentUserId;
@@ -104,7 +94,11 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     }
   }
 
-  Future<void> _decide(int studentUserId, String decision) async {
+  Future<void> _decide(
+    int studentUserId,
+    String decision, {
+    int? studentPostId,
+  }) async {
     final index = _candidates.indexWhere(
       (c) => _extractStudentId(c) == studentUserId,
     );
@@ -117,7 +111,15 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     }
 
     try {
-      await AppServices.feed.decideOnStudent(studentUserId, decision);
+      if (studentPostId != null && studentPostId != 0) {
+        await AppServices.feed.decideOnStudentPost(studentPostId, decision);
+      } else {
+        await AppServices.feed.decideOnStudent(studentUserId, decision);
+      }
+
+      // Spec: after company LIKE/PASS, refresh /applications so pending/accepted/
+      // declined reflect immediately in Messages/Chat.
+      AppServices.events.applicationsChanged();
     } catch (e) {
       if (removed != null) {
         setState(() {
@@ -338,156 +340,208 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     final int studentUserId = _extractStudentId(candidate);
     final int? studentPostId = _extractStudentPostId(candidate);
     final String name = candidate.name;
-    final String university = candidate.university ?? '';
-    final String department = candidate.department ?? '';
     final String bio = candidate.bio ?? '';
+    final String studies = candidate.studies ?? '';
     final String skills = candidate.skills ?? '';
+    final String experience = candidate.experience ?? '';
 
-    final String? cardImageUrl = resolveApiUrl(
-      candidate.imageUrl,
-      baseUrl: AppServices.baseUrl,
-    );
+    final String studiesTitle = () {
+      final lines = studies
+          .split('\n')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      if (lines.isNotEmpty) return lines.first;
+      final fallback = (candidate.department ?? '').trim();
+      return fallback;
+    }();
+
     final String? profileImageUrl = resolveApiUrl(
       candidate.studentProfileImageUrl,
       baseUrl: AppServices.baseUrl,
     );
     final bool isSaved = _savedCandidateIds.contains(studentUserId);
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: const Color(0xFF0D3B1A),
-          width: 2.5,
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onDoubleTap: () =>
+          _toggleSave(studentUserId, studentPostId: studentPostId),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: const Color(0xFF0D3B1A),
+            width: 2.5,
+          ),
+          borderRadius: BorderRadius.circular(12),
         ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFF1B5E20),
-                    width: 1.5,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF1B5E20),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: AppProfileAvatar(
+                    imageUrl: profileImageUrl,
+                    size: 32,
+                    fallbackIcon: Icons.person,
                   ),
                 ),
-                child: AppProfileAvatar(
-                  imageUrl: profileImageUrl,
-                  size: 32,
-                  fallbackIcon: Icons.person,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name.isNotEmpty ? name : 'Candidate',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1B5E20),
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
-                    if (university.isNotEmpty)
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        university,
+                        name.isNotEmpty ? name : 'Candidate',
                         style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF1B5E20),
-                          fontFamily: 'Trirong',
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AppCachedImage(
-                imageUrl: cardImageUrl,
-                width: 60,
-                height: 60,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (department.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text(
-                          department,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1B5E20),
-                            fontFamily: 'Trirong',
-                          ),
-                        ),
-                      ),
-                    Text(
-                      bio.isNotEmpty ? bio : 'No bio provided',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF1B5E20),
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
-                    if (skills.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        skills,
-                        style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                           color: Color(0xFF1B5E20),
                           fontFamily: 'Trirong',
                         ),
                       ),
                     ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (studiesTitle.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  studiesTitle,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
+              ),
+            if (bio.isNotEmpty)
+              Text(
+                bio,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF1B5E20),
+                  fontFamily: 'Trirong',
+                ),
+              )
+            else
+              const Text(
+                'No bio provided',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF1B5E20),
+                  fontFamily: 'Trirong',
+                ),
+              ),
+            if (skills.isNotEmpty ||
+                studies.isNotEmpty ||
+                experience.isNotEmpty)
+              const SizedBox(height: 12),
+            if (skills.isNotEmpty) ...[
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                  children: [
+                    const TextSpan(
+                      text: 'Skills: ',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    TextSpan(text: skills),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (studies.isNotEmpty) ...[
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                  children: [
+                    const TextSpan(
+                      text: 'Studies: ',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    TextSpan(text: studies),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (experience.isNotEmpty) ...[
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                  children: [
+                    const TextSpan(
+                      text: 'Experience: ',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    TextSpan(text: experience),
                   ],
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              IconButton(
-                tooltip: 'Pass',
-                icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
-                onPressed: () => _decide(studentUserId, 'PASS'),
-              ),
-              IconButton(
-                tooltip: 'Like',
-                icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
-                onPressed: () => _decide(studentUserId, 'LIKE'),
-              ),
-              IconButton(
-                tooltip: 'Save',
-                icon: Icon(
-                  isSaved ? Icons.favorite : Icons.favorite_outline,
-                  color: const Color(0xFF1B5E20),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  tooltip: 'Pass',
+                  icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
+                  onPressed: () => _decide(
+                    studentUserId,
+                    'PASS',
+                    studentPostId: studentPostId,
+                  ),
                 ),
-                onPressed: () =>
-                    _toggleSave(studentUserId, studentPostId: studentPostId),
-              ),
-            ],
-          ),
-        ],
+                IconButton(
+                  tooltip: 'Like',
+                  icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
+                  onPressed: () => _decide(
+                    studentUserId,
+                    'LIKE',
+                    studentPostId: studentPostId,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Save',
+                  icon: Icon(
+                    isSaved ? Icons.favorite : Icons.favorite_outline,
+                    color: const Color(0xFF1B5E20),
+                  ),
+                  onPressed: () =>
+                      _toggleSave(studentUserId, studentPostId: studentPostId),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
 import 'message_chat_company_screen.dart';
+import '../utils/application_status.dart';
+import '../utils/application_context.dart';
+import 'dart:async';
 
 class MessagesCompanyScreen extends StatefulWidget {
   const MessagesCompanyScreen({super.key});
@@ -9,13 +12,21 @@ class MessagesCompanyScreen extends StatefulWidget {
   State<MessagesCompanyScreen> createState() => _MessagesCompanyScreenState();
 }
 
-class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
+class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
+    with WidgetsBindingObserver {
   String? _selectedFilter;
   bool _showFilter = false;
 
   bool _isLoading = true;
   String? _error;
   List<dynamic> _applications = [];
+
+  Timer? _pollTimer;
+
+  final Map<int, String> _seenPreviewTokenByConversationId = {};
+
+  final Map<int, String> _conversationLastSystemText = {};
+  final Map<int, DateTime> _conversationLastFetchedAt = {};
 
   final List<String> filters = [
     'All',
@@ -27,7 +38,72 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    AppServices.events.addListener(_onApplicationsChanged);
     _loadApplications();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    AppServices.events.removeListener(_onApplicationsChanged);
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onApplicationsChanged() {
+    if (!mounted) return;
+    _loadApplications();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadApplications();
+    }
+  }
+
+  bool _shouldHideApplication(Map item) {
+    final statusRaw = (item['status'] ?? '').toString();
+    final status = normalizeApplicationStatus(statusRaw);
+    final lastMessage = (item['lastMessage'] ?? '').toString().trim();
+
+    if (status == 'DECLINED') {
+      final cidRaw = item['conversationId'];
+      final cid =
+          cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
+      if ((cid == null || cid == 0) && lastMessage.isEmpty) return true;
+    }
+    return false;
+  }
+
+  void _updatePolling() {
+    final hasPending = _applications.any((a) {
+      if (a is! Map) return false;
+      final statusRaw = (a['status'] ?? '').toString();
+      final lastMessage = (a['lastMessage'] ?? '').toString();
+      final cidRaw = a['conversationId'];
+      final cid =
+          cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
+      final derived = deriveApplicationStatus(
+        applicationStatusRaw: statusRaw,
+        lastMessage: lastMessage,
+        lastSystemMessage:
+            cid == null ? null : _conversationLastSystemText[cid],
+      );
+      return derived == 'PENDING';
+    });
+
+    if (!hasPending) {
+      _pollTimer?.cancel();
+      _pollTimer = null;
+      return;
+    }
+
+    _pollTimer ??= Timer.periodic(const Duration(seconds: 8), (_) {
+      if (!mounted) return;
+      _loadApplications();
+    });
   }
 
   Future<void> _loadApplications() async {
@@ -38,16 +114,95 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
     try {
       final data = await AppServices.applications.listApplications();
       if (!mounted) return;
+
+      final apps = _dedupByConversationId(data)
+          .where((item) => item is Map ? !_shouldHideApplication(item) : true)
+          .toList();
+
       setState(() {
-        _applications = _dedupByConversationId(data);
+        _applications = apps;
         _isLoading = false;
       });
+      _updatePolling();
+
+      await _refreshConversationStatusOverrides(apps);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _refreshConversationStatusOverrides(List<dynamic> apps) async {
+    final List<Future<void>> tasks = [];
+    bool didUpdateAny = false;
+
+    for (final a in apps) {
+      if (a is! Map) continue;
+
+      final cidRaw = a['conversationId'];
+      final cid =
+          cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
+      if (cid == null || cid == 0) continue;
+
+      final statusRaw = (a['status'] ?? '').toString();
+      final lastMessage = (a['lastMessage'] ?? '').toString();
+
+      final derived = deriveApplicationStatus(
+        applicationStatusRaw: statusRaw,
+        lastMessage: lastMessage,
+        lastSystemMessage: _conversationLastSystemText[cid],
+      );
+
+      if (derived != 'PENDING') continue;
+
+      final lastFetched = _conversationLastFetchedAt[cid];
+      if (lastFetched != null &&
+          DateTime.now().difference(lastFetched) <
+              const Duration(seconds: 10)) {
+        continue;
+      }
+
+      tasks.add(() async {
+        _conversationLastFetchedAt[cid] = DateTime.now();
+        try {
+          final messages = await AppServices.chat.getMessages(cid);
+          String? lastSystemText;
+          for (var i = messages.length - 1; i >= 0; i--) {
+            final m = messages[i];
+            if (m is! Map) continue;
+            final bool isSystem = (m['isSystem'] == true) ||
+                (m['type']?.toString().toUpperCase() == 'SYSTEM');
+            if (!isSystem) continue;
+            final txt = (m['text'] ?? m['message'] ?? '').toString();
+            if (txt.trim().isEmpty) continue;
+            lastSystemText = txt;
+            break;
+          }
+
+          if (lastSystemText != null && lastSystemText.trim().isNotEmpty) {
+            if (_conversationLastSystemText[cid] != lastSystemText) {
+              _conversationLastSystemText[cid] = lastSystemText;
+              didUpdateAny = true;
+            }
+          }
+        } catch (_) {
+          // best effort
+        }
+      }());
+    }
+
+    if (tasks.isEmpty) return;
+    await Future.wait(tasks);
+
+    if (!mounted) return;
+    if (didUpdateAny) {
+      setState(() {
+        // trigger rebuild
+      });
+      _updatePolling();
     }
   }
 
@@ -207,17 +362,29 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
     );
   }
 
-  Widget _buildMessageItem(Map<String, String> message) {
+  Widget _buildMessageItem(Map<String, dynamic> message) {
     return GestureDetector(
       onTap: () {
+        final cid = message['conversationId'] is int
+            ? message['conversationId'] as int
+            : int.tryParse(message['conversationId']?.toString() ?? '') ?? 0;
+        if (cid != 0) {
+          final token = (message['previewToken'] ?? '').toString();
+          setState(() {
+            _seenPreviewTokenByConversationId[cid] = token;
+          });
+        }
+
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => ChatCompanyScreen(
-              conversationId: int.parse(message['conversationId']!),
-              title: message['student']!,
-              subtitle: message['status']!,
-              canSend: message['status']!.toUpperCase() == 'ACCEPTED',
+              conversationId: cid,
+              title: (message['student'] ?? '').toString(),
+              contextLine: message['contextLine'] ?? '',
+              subtitle: (message['status'] ?? '').toString(),
+              canSend: (message['type'] ?? '').toString().toUpperCase() ==
+                  'ACCEPTED',
             ),
           ),
         );
@@ -258,7 +425,8 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    message['student']!,
+                    (message['displayTitle'] ?? message['student'] ?? '')
+                        .toString(),
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -268,12 +436,29 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                      (message['lastMessage']?.isNotEmpty ?? false)
-                          ? message['lastMessage']!
-                          : message['status']!,
+                    () {
+                      final last = (message['lastMessage'] ?? '').trim();
+                      final lastSystem =
+                          (message['lastSystemMessage'] ?? '').trim();
+                      final type = (message['type'] ?? '').toUpperCase();
+
+                      if (last.isNotEmpty &&
+                          normalizeApplicationStatus(last) == 'PENDING' &&
+                          type != 'PENDING') {
+                        return message['status']!;
+                      }
+
+                      if ((last.isEmpty ||
+                              normalizeApplicationStatus(last) == 'PENDING') &&
+                          lastSystem.isNotEmpty) {
+                        return lastSystem;
+                      }
+
+                      return last.isNotEmpty ? last : message['status']!;
+                    }(),
                     style: TextStyle(
                       fontSize: 12,
-                        color: (message['type'] ?? '').toUpperCase() == 'DECLINED'
+                      color: (message['type'] ?? '').toUpperCase() == 'DECLINED'
                           ? Colors.red
                           : const Color(0xFF1B5E20),
                       fontFamily: 'Trirong',
@@ -283,11 +468,12 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(
-              Icons.circle,
-              size: 8,
-              color: Color(0xFF1B5E20),
-            ),
+            if (message['showUnseenDot'] == true)
+              const Icon(
+                Icons.circle,
+                size: 8,
+                color: Color(0xFF1B5E20),
+              ),
           ],
         ),
       ),
@@ -357,17 +543,29 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
               style: const TextStyle(fontFamily: 'Trirong'),
             ),
           ),
-          ElevatedButton(onPressed: _loadApplications, child: const Text('Retry')),
+          ElevatedButton(
+              onPressed: _loadApplications, child: const Text('Retry')),
         ],
       );
     }
 
     final filtered = _selectedFilter == null || _selectedFilter == 'All'
-      ? _applications
-      : _applications.where((a) {
-        final status = (a['status'] ?? '').toString().toUpperCase();
-        return status == _selectedFilter;
-        }).toList();
+        ? _applications
+        : _applications.where((a) {
+            if (a is! Map) return false;
+            final statusRaw = (a['status'] ?? '').toString();
+            final lastMessage = (a['lastMessage'] ?? '').toString();
+            final cidRaw = a['conversationId'];
+            final cid =
+                cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
+            final derived = deriveApplicationStatus(
+              applicationStatusRaw: statusRaw,
+              lastMessage: lastMessage,
+              lastSystemMessage:
+                  cid == null ? null : _conversationLastSystemText[cid],
+            );
+            return derived == _selectedFilter;
+          }).toList();
 
     if (filtered.isEmpty) {
       return const Center(
@@ -388,17 +586,65 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final item = filtered[index] as Map;
-        final status = (item['status'] ?? '') as String;
-        final student = (item['otherPartyName'] ?? item['student'] ?? 'Student') as String;
-        final lastMessage = (item['lastMessage'] ?? '') as String;
+        final statusRaw = (item['status'] ?? '').toString();
+        final lastMessage = (item['lastMessage'] ?? '').toString();
         final conversationId = (item['conversationId'] as int?) ?? 0;
+        final derived = deriveApplicationStatus(
+          applicationStatusRaw: statusRaw,
+          lastMessage: lastMessage,
+          lastSystemMessage: conversationId == 0
+              ? null
+              : _conversationLastSystemText[conversationId],
+        );
+        final statusText = displayApplicationStatus(derived);
+        final student =
+            (item['otherPartyName'] ?? item['student'] ?? 'Student') as String;
+        final adLabel = extractAdLabel(item);
+        final displayTitle = buildConversationListTitle(
+          otherPartyName: student,
+          adLabel: adLabel,
+        );
+        final lastMessageForUi = (item['lastMessage'] ?? '') as String;
+
+        final unreadRaw =
+            item['unreadCount'] ?? item['unread'] ?? item['isUnread'];
+        int? unreadCount;
+        if (unreadRaw is int) {
+          unreadCount = unreadRaw;
+        } else if (unreadRaw is bool) {
+          unreadCount = unreadRaw ? 1 : 0;
+        } else {
+          unreadCount = int.tryParse(unreadRaw?.toString() ?? '');
+        }
+
+        final lastSystem = conversationId == 0
+            ? ''
+            : (_conversationLastSystemText[conversationId] ?? '');
+        final previewToken = (lastSystem.trim().isNotEmpty
+                ? lastSystem.trim()
+                : (lastMessageForUi.trim().isNotEmpty
+                    ? lastMessageForUi.trim()
+                    : statusText.trim()))
+            .trim();
+
+        final seenToken = _seenPreviewTokenByConversationId[conversationId];
+        final showUnseenDot = conversationId != 0
+            ? (unreadCount != null
+                ? unreadCount > 0
+                : (seenToken != previewToken))
+            : false;
 
         return _buildMessageItem({
           'student': student,
-          'status': status,
-          'type': status,
-          'conversationId': conversationId.toString(),
-          'lastMessage': lastMessage,
+          'displayTitle': displayTitle,
+          'contextLine': adLabel,
+          'status': statusText,
+          'type': derived,
+          'conversationId': conversationId,
+          'lastMessage': lastMessageForUi,
+          'lastSystemMessage': conversationId == 0 ? '' : lastSystem,
+          'previewToken': previewToken,
+          'showUnseenDot': showUnseenDot,
         });
       },
     );
@@ -408,10 +654,13 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
     final Map<String, dynamic> byKey = {};
     for (final item in raw) {
       final cidRaw = item['conversationId'];
-      final cid = cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
-      final key = cid != null
-          ? 'cid_$cid'
-          : 'party_${(item['otherPartyName'] ?? item['student'] ?? '').toString()}';
+      final cid =
+          cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
+      final otherParty =
+          (item['otherPartyName'] ?? item['student'] ?? '').toString();
+      final adLabel = item is Map ? extractAdLabel(item) : '';
+      final key =
+          cid != null ? 'cid_$cid' : 'party_${otherParty}_ad_${adLabel.trim()}';
       if (key.trim().isEmpty) continue;
       byKey[key] = item;
     }

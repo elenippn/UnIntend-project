@@ -1,25 +1,19 @@
-class AuthMeDto {
-  final int? id;
-  final String? role;
+class StudentProfileDto {
+  final int id;
   final String username;
   final String name;
   final String surname;
-  final String? companyName;
-  final String? companyBio;
   final String? bio;
   final String? studies;
   final String? skills;
   final String? experience;
   final String? profileImageUrl;
 
-  const AuthMeDto({
+  const StudentProfileDto({
     required this.id,
-    required this.role,
     required this.username,
     required this.name,
     required this.surname,
-    required this.companyName,
-    required this.companyBio,
     required this.bio,
     required this.studies,
     required this.skills,
@@ -27,17 +21,16 @@ class AuthMeDto {
     required this.profileImageUrl,
   });
 
-  factory AuthMeDto.fromJson(Map<String, dynamic> json) {
-    return AuthMeDto(
-      id: json['id'] is int
-          ? json['id'] as int
-          : int.tryParse(json['id']?.toString() ?? ''),
-      role: json['role'] as String?,
+  factory StudentProfileDto.fromJson(Map<String, dynamic> json) {
+    final rawId = json['id'] ?? json['userId'] ?? json['studentUserId'];
+    final int id =
+        rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '') ?? 0;
+
+    return StudentProfileDto(
+      id: id,
       username: (json['username'] ?? '') as String,
       name: (json['name'] ?? '') as String,
       surname: (json['surname'] ?? '') as String,
-      companyName: json['companyName'] as String?,
-      companyBio: json['companyBio'] as String?,
       bio: json['bio'] as String?,
       studies: json['studies'] as String?,
       skills: (json['skills'] ?? json['skillset']) as String?,

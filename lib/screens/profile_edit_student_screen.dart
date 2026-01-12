@@ -22,11 +22,13 @@ class _ProfileEditStudentScreenState extends State<ProfileEditStudentScreen> {
   final TextEditingController _surnameController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
   final TextEditingController _studiesController = TextEditingController();
+  final TextEditingController _skillsController = TextEditingController();
   final TextEditingController _experienceController = TextEditingController();
 
   // Track which fields are being edited
   bool _showBioInput = false;
   bool _showStudiesInput = false;
+  bool _showSkillsInput = false;
   bool _showExperienceInput = false;
   bool _isLoading = true;
   bool _isSaving = false;
@@ -296,6 +298,13 @@ class _ProfileEditStudentScreenState extends State<ProfileEditStudentScreen> {
                   'Studies', _studiesController, _showStudiesInput, () {
                 setState(() {
                   _showStudiesInput = !_showStudiesInput;
+                });
+              }),
+              const SizedBox(height: 16),
+              _buildEditableItem('Skills', _skillsController, _showSkillsInput,
+                  () {
+                setState(() {
+                  _showSkillsInput = !_showSkillsInput;
                 });
               }),
               const SizedBox(height: 16),
@@ -619,9 +628,11 @@ class _ProfileEditStudentScreenState extends State<ProfileEditStudentScreen> {
         _surnameController.text = me.surname;
         _bioController.text = me.bio ?? '';
         _studiesController.text = me.studies ?? '';
+        _skillsController.text = me.skills ?? '';
         _experienceController.text = me.experience ?? '';
         _showBioInput = true;
         _showStudiesInput = true;
+        _showSkillsInput = true;
         _showExperienceInput = true;
         _isLoading = false;
       });
@@ -694,6 +705,7 @@ class _ProfileEditStudentScreenState extends State<ProfileEditStudentScreen> {
         surname: _surnameController.text,
         bio: _bioController.text,
         studies: _studiesController.text,
+        skills: _skillsController.text,
         experience: _experienceController.text,
       );
       if (!mounted) return;
@@ -728,6 +740,7 @@ class _ProfileEditStudentScreenState extends State<ProfileEditStudentScreen> {
     _surnameController.dispose();
     _bioController.dispose();
     _studiesController.dispose();
+    _skillsController.dispose();
     _experienceController.dispose();
     super.dispose();
   }

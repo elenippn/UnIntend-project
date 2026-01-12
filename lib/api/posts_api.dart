@@ -1,6 +1,7 @@
 import 'api_client.dart';
 import '../models/internship_post_dto.dart';
 import '../models/profile_post_dto.dart';
+import 'package:dio/dio.dart';
 
 class PostsApi {
   final ApiClient client;
@@ -40,7 +41,23 @@ class PostsApi {
   }
 
   Future<void> deleteCompanyPost(int postId) async {
-    await client.delete('/posts/$postId');
+    try {
+      await client.delete('/posts/$postId');
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      // Some backends expose deletion via POST instead of DELETE.
+      if (status == 405) {
+        try {
+          await client.post('/posts/$postId/delete');
+          return;
+        } on DioException {
+          // Fallback variant
+          await client.post('/posts/delete/$postId');
+          return;
+        }
+      }
+      rethrow;
+    }
   }
 
   Future<ProfilePostDto> createProfilePost({

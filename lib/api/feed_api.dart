@@ -45,6 +45,13 @@ class FeedApi {
     });
   }
 
+  Future<void> decideOnStudentPost(int studentPostId, String decision) async {
+    await client.post('/decisions/company/student-post', data: {
+      "studentPostId": studentPostId,
+      "decision": decision,
+    });
+  }
+
   Future<void> saveStudent(int studentUserId, bool saved) async {
     await client.post('/saves/company/student', data: {
       "studentUserId": studentUserId,
