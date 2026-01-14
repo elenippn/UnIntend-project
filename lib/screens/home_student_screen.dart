@@ -129,7 +129,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   }
 
   List<dynamic> get _filteredInternships {
-    if (_selectedDepartments.isEmpty) {
+    if (_selectedDepartments.isEmpty || _selectedDepartments.contains('All')) {
       return _internships;
     }
     // Filter by department field from backend
@@ -329,14 +329,15 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
             onTap: () {
               setState(() {
                 if (dept == 'All') {
-                  // "All" clears all selections
+                  // "All" is selected alone
                   _selectedDepartments.clear();
+                  _selectedDepartments.add('All');
                 } else {
+                  // Remove "All" if selecting a specific department
+                  _selectedDepartments.remove('All');
                   if (isSelected) {
                     _selectedDepartments.remove(dept);
                   } else {
-                    // Remove "All" if selecting a specific department
-                    _selectedDepartments.remove('All');
                     _selectedDepartments.add(dept);
                   }
                 }

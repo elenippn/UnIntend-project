@@ -25,7 +25,7 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
   ];
 
   List<dynamic> get _filteredApplications {
-    if (_selectedFilters.isEmpty) {
+    if (_selectedFilters.isEmpty || _selectedFilters.contains('All')) {
       return _applications;
     }
     return _applications.where((a) {
@@ -200,14 +200,15 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen> {
             onTap: () {
               setState(() {
                 if (filter == 'All') {
-                  // "All" clears all selections
+                  // "All" is selected alone
                   _selectedFilters.clear();
+                  _selectedFilters.add('All');
                 } else {
+                  // Remove "All" if selecting a specific filter
+                  _selectedFilters.remove('All');
                   if (isSelected) {
                     _selectedFilters.remove(filter);
                   } else {
-                    // Remove "All" if selecting a specific filter
-                    _selectedFilters.remove('All');
                     _selectedFilters.add(filter);
                   }
                 }

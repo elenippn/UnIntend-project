@@ -46,7 +46,7 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
   }
 
   List<dynamic> get _filteredCandidates {
-    if (_selectedDepartments.isEmpty) {
+    if (_selectedDepartments.isEmpty || _selectedDepartments.contains('All')) {
       return _candidates;
     }
     // Filter by department field from backend
@@ -274,14 +274,15 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
             onTap: () {
               setState(() {
                 if (dept == 'All') {
-                  // "All" clears all selections
+                  // "All" is selected alone
                   _selectedDepartments.clear();
+                  _selectedDepartments.add('All');
                 } else {
+                  // Remove "All" if selecting a specific department
+                  _selectedDepartments.remove('All');
                   if (isSelected) {
                     _selectedDepartments.remove(dept);
                   } else {
-                    // Remove "All" if selecting a specific department
-                    _selectedDepartments.remove('All');
                     _selectedDepartments.add(dept);
                   }
                 }
