@@ -7,7 +7,7 @@ import 'api/saves_api.dart';
 import 'api/posts_api.dart';
 
 class AppServices {
-  static final ApiClient client = ApiClient(baseUrl: "http://127.0.0.1:8000");
+  static final ApiClient client = ApiClient(baseUrl: "http://10.0.2.2:8000");
 
   static final AuthApi auth = AuthApi(client);
   static final FeedApi feed = FeedApi(client);

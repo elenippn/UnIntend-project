@@ -10,7 +10,7 @@ class MessagesStudentScreen extends StatefulWidget {
 }
 
 class _MessagesStudentScreenState extends State<MessagesStudentScreen> {
-  String? _selectedFilter;
+  Set<String> _selectedFilters = {};
   bool _showFilter = false;
 
   bool _isLoading = true;
@@ -65,6 +65,16 @@ class _MessagesStudentScreenState extends State<MessagesStudentScreen> {
       byKey[key] = item; // keep last occurrence
     }
     return byKey.values.toList();
+  }
+
+  List<dynamic> get _filteredApplications {
+    if (_selectedFilters.isEmpty) {
+      return _applications;
+    }
+    return _applications.where((a) {
+      final status = (a['status'] ?? '').toString().toUpperCase();
+      return _selectedFilters.contains(status);
+    }).toList();
   }
 
   @override
@@ -196,25 +206,51 @@ class _MessagesStudentScreenState extends State<MessagesStudentScreen> {
       ),
       child: ListView.builder(
         shrinkWrap: true,
+        padding: EdgeInsets.zero,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: filters.length,
         itemBuilder: (context, index) {
+          final filter = filters[index];
+          final isSelected = _selectedFilters.contains(filter);
           return GestureDetector(
             onTap: () {
               setState(() {
-                _selectedFilter = filters[index];
-                _showFilter = false;
+                if (filter == 'All') {
+                  // "All" clears all selections
+                  _selectedFilters.clear();
+                } else {
+                  if (isSelected) {
+                    _selectedFilters.remove(filter);
+                  } else {
+                    // Remove "All" if selecting a specific filter
+                    _selectedFilters.remove('All');
+                    _selectedFilters.add(filter);
+                  }
+                }
               });
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Text(
-                filters[index],
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: Colors.white,
-                  fontFamily: 'Trirong',
-                ),
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      filter,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -380,12 +416,7 @@ Widget _buildMessageItem(Map<String, String> message) {
         );
       }
 
-      final filtered = _selectedFilter == null || _selectedFilter == 'All'
-        ? _applications
-        : _applications.where((a) {
-          final status = (a['status'] ?? '').toString().toUpperCase();
-          return status == _selectedFilter;
-          }).toList();
+      final filtered = _filteredApplications;
 
       if (filtered.isEmpty) {
         return const Center(
