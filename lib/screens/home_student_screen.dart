@@ -114,6 +114,17 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
       // pending/declined immediately. For PASS we do nothing (no chat created).
       if (decision.toUpperCase() == 'LIKE') {
         AppServices.events.applicationsChanged();
+
+        // Show confirmation message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Ready to connect! Check your messages."),
+              duration: Duration(seconds: 2),
+              backgroundColor: Color(0xFF4CAF50),
+            ),
+          );
+        }
       }
     } catch (e) {
       // revert if failed
@@ -369,154 +380,177 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
 
     final bool isSaved = _savedPostIds.contains(postId);
 
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onDoubleTap: () => _toggleSave(postId),
-      child: Container(
+    return Dismissible(
+      key: Key('internship_$postId'),
+      direction:
+          DismissDirection.startToEnd, // Swipe right (από αριστερά προς δεξιά)
+      confirmDismiss: (direction) async {
+        // Swipe right = LIKE
+        await _decide(postId, "LIKE");
+        return true;
+      },
+      background: Container(
         decoration: BoxDecoration(
-          border: Border.all(
-            color: const Color(0xFF0D3B1A),
-            width: 2.5,
-          ),
+          color: const Color(0xFF4CAF50), // Πράσινο για LIKE
           borderRadius: BorderRadius.circular(12),
         ),
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF1B5E20),
-                      width: 1.5,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        child: const Icon(
+          Icons.favorite,
+          color: Colors.white,
+          size: 32,
+        ),
+      ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onDoubleTap: () => _toggleSave(postId),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: const Color(0xFF0D3B1A),
+              width: 2.5,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF1B5E20),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: AppProfileAvatar(
+                      imageUrl: companyProfileImageUrl,
+                      size: 32,
+                      fallbackIcon: Icons.business,
                     ),
                   ),
-                  child: AppProfileAvatar(
-                    imageUrl: companyProfileImageUrl,
-                    size: 32,
-                    fallbackIcon: Icons.business,
+                  const SizedBox(width: 8),
+                  Text(
+                    companyName,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1B5E20),
+                      fontFamily: 'Trirong',
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  companyName,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1B5E20),
-                    fontFamily: 'Trirong',
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppCachedImage(
+                    imageUrl: imageUrl,
+                    width: 60,
+                    height: 60,
+                    borderRadius: BorderRadius.circular(4),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AppCachedImage(
-                  imageUrl: imageUrl,
-                  width: 60,
-                  height: 60,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (title.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Text(
-                            title,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF1B5E20),
-                              fontFamily: 'Trirong',
-                            ),
-                          ),
-                        ),
-                      Text(
-                        description,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF1B5E20),
-                          fontFamily: 'Trirong',
-                        ),
-                      ),
-                      if (location.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(Icons.location_on,
-                                size: 14, color: Color(0xFF1B5E20)),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                location,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF1B5E20),
-                                  fontFamily: 'Trirong',
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (title.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text(
+                              title,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1B5E20),
+                                fontFamily: 'Trirong',
                               ),
                             ),
-                          ],
+                          ),
+                        Text(
+                          description,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF1B5E20),
+                            fontFamily: 'Trirong',
+                          ),
                         ),
-                      ],
-                      const SizedBox(height: 8),
-                      Row(
-                        children: List.generate(
-                          3,
-                          (i) => Expanded(
-                            child: Container(
-                              height: 4,
-                              margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
-                              color: Colors.grey[400],
+                        if (location.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on,
+                                  size: 14, color: Color(0xFF1B5E20)),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  location,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF1B5E20),
+                                    fontFamily: 'Trirong',
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        Row(
+                          children: List.generate(
+                            3,
+                            (i) => Expanded(
+                              child: Container(
+                                height: 4,
+                                margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
+                                color: Colors.grey[400],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+                ],
+              ),
+              const SizedBox(height: 12),
 
-            // Actions row (προσωρινό like/pass + save)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                IconButton(
-                  tooltip: "Pass",
-                  icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
-                  onPressed: () => _decide(postId, "PASS"),
-                ),
-                IconButton(
-                  tooltip: "Like",
-                  icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
-                  onPressed: () => _decide(postId, "LIKE"),
-                ),
-                IconButton(
-                  tooltip: "Save",
-                  icon: Icon(
-                    isSaved ? Icons.favorite : Icons.favorite_outline,
-                    color: const Color(0xFF1B5E20),
+              // Actions row (προσωρινό like/pass + save)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    tooltip: "Pass",
+                    icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
+                    onPressed: () => _decide(postId, "PASS"),
                   ),
-                  onPressed: () => _toggleSave(postId),
-                ),
-              ],
-            ),
-          ],
+                  IconButton(
+                    tooltip: "Like",
+                    icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
+                    onPressed: () => _decide(postId, "LIKE"),
+                  ),
+                  IconButton(
+                    tooltip: "Save",
+                    icon: Icon(
+                      isSaved ? Icons.favorite : Icons.favorite_outline,
+                      color: const Color(0xFF1B5E20),
+                    ),
+                    onPressed: () => _toggleSave(postId),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
