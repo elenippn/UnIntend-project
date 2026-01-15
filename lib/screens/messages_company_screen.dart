@@ -443,13 +443,28 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
                   width: 1.5,
                 ),
               ),
-              child: const Center(
-                child: Icon(
-                  Icons.person,
-                  size: 20,
-                  color: Color(0xFF1B5E20),
-                ),
-              ),
+              child: message['studentProfileImageUrl'] != null
+                  ? ClipOval(
+                      child: Image.network(
+                        message['studentProfileImageUrl'],
+                        fit: BoxFit.cover,
+                        width: 38,
+                        height: 38,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(
+                          Icons.person,
+                          size: 20,
+                          color: Color(0xFF1B5E20),
+                        ),
+                      ),
+                    )
+                  : const Center(
+                      child: Icon(
+                        Icons.person,
+                        size: 20,
+                        color: Color(0xFF1B5E20),
+                      ),
+                    ),
             ),
             const SizedBox(width: 12),
             Expanded(

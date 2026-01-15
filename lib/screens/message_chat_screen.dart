@@ -518,8 +518,11 @@ class _ChatBubble extends StatelessWidget {
   final bool isMe;
   final bool isSystem;
 
-  const _ChatBubble(
-      {required this.text, required this.isMe, this.isSystem = false});
+  const _ChatBubble({
+    required this.text,
+    required this.isMe,
+    this.isSystem = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -556,23 +559,51 @@ class _ChatBubble extends StatelessWidget {
     return Column(
       crossAxisAlignment: align,
       children: [
-        Container(
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          padding: const EdgeInsets.all(12),
-          constraints: const BoxConstraints(maxWidth: 260),
-          decoration: BoxDecoration(
-            color: bubbleColor,
-            border: Border.all(color: const Color(0xFF1B5E20), width: 2),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontSize: 15,
-              color: Color(0xFF1B5E20),
-              fontFamily: 'Trirong',
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment:
+              isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+          children: [
+            // Default icon για incoming messages
+            if (!isMe)
+              Container(
+                width: 32,
+                height: 32,
+                margin: const EdgeInsets.only(right: 8, top: 8),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFC9D3C9),
+                  border: Border.all(color: const Color(0xFF1B5E20), width: 1),
+                ),
+                child: const Icon(
+                  Icons.business,
+                  size: 16,
+                  color: Color(0xFF1B5E20),
+                ),
+              ),
+
+            // Message bubble
+            Flexible(
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.all(12),
+                constraints: const BoxConstraints(maxWidth: 260),
+                decoration: BoxDecoration(
+                  color: bubbleColor,
+                  border: Border.all(color: const Color(0xFF1B5E20), width: 2),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ],
     );
