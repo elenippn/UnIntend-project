@@ -76,7 +76,7 @@ String displayApplicationStatus(String? raw) {
     case 'ACCEPTED':
       return 'Ready to connect';
     case 'DECLINED':
-      return 'Not a match';
+      return 'Unfortunately this was not a match, keep searching';
     default:
       return (raw ?? '').toString();
   }

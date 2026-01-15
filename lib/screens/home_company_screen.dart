@@ -525,6 +525,27 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
                       ],
                     ),
                   ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ViewProfileStudentScreen(
+                            student: {
+                              'studentUserId': studentUserId,
+                              'id': studentUserId,
+                              'name': name,
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Icon(
+                      Icons.chevron_right,
+                      color: Color(0xFF1B5E20),
+                      size: 28,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),

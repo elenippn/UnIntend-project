@@ -32,19 +32,9 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
   final List<String> filters = [
     'All',
     'ACCEPTED',
+    'PENDING',
     'DECLINED',
-    'OTHER',
   ];
-
-  List<dynamic> get _filteredApplications {
-    if (_selectedFilter.isEmpty || _selectedFilter.contains('All')) {
-      return _applications;
-    }
-    return _applications.where((a) {
-      final status = (a['status'] ?? '').toString().toUpperCase();
-      return _selectedFilter.contains(status);
-    }).toList();
-  }
 
   @override
   void initState() {

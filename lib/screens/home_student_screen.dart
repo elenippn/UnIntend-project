@@ -544,13 +544,35 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    companyName,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Text(
+                      companyName,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ViewProfileCompanyScreen(
+                            company: {
+                              'companyName': companyName,
+                              'userId': internship.companyUserId,
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Icon(
+                      Icons.chevron_right,
                       color: Color(0xFF1B5E20),
-                      fontFamily: 'Trirong',
+                      size: 28,
                     ),
                   ),
                 ],

@@ -36,9 +36,8 @@ class _MessagesStudentScreenState extends State<MessagesStudentScreen>
   final List<String> filters = [
     'All',
     'ACCEPTED',
-    'DECLINED',
     'PENDING',
-    'OTHER',
+    'DECLINED',
   ];
 
   @override
