@@ -32,50 +32,17 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
 
   Future<void> _loadProfile() async {
     final int? companyUserId = _extractCompanyUserId(widget.company);
-    print('🔍 DEBUG: companyUserId = $companyUserId');
-    print('🔍 DEBUG: company map keys = ${widget.company.keys.toList()}');
-    print('🔍 DEBUG: company map values = ${widget.company}');
-    
-    if (companyUserId == null) {
-      print('❌ DEBUG: companyUserId is null, cannot load profile');
-      return;
-    }
+    if (companyUserId == null) return;
 
     try {
-      // Try to get the company profile using the new API method
-      print('🔄 DEBUG: Trying API endpoints...');
-      final profile = await AppServices.profiles.getCompanyProfile(companyUserId);
+      // Use the new company profile endpoint
+      final profile =
+          await AppServices.profiles.getCompanyProfile(companyUserId);
       if (!mounted) return;
-      
-      if (profile != null) {
-        setState(() {
-          _profile = profile;
-        });
-        print('✅ DEBUG: Profile loaded successfully from API');
-        print('📋 DEBUG: profile.username = ${profile.username}, profile.companyName = ${profile.companyName}');
-        print('📋 DEBUG: profile.companyBio = ${profile.companyBio}');
-        print('📋 DEBUG: profile.bio = ${profile.bio}');
-        print('📋 DEBUG: profile.profileImageUrl = ${profile.profileImageUrl}');
-      } else {
-        print('⚠️ DEBUG: No profile found via API, trying getMe()...');
-        
-        // Fallback: Try to get the company profile if it's the current user
-        final me = await AppServices.auth.getMe();
-        print('👤 DEBUG: me.id = ${me.id}, me.username = ${me.username}');
-        print('👤 DEBUG: me.companyName = ${me.companyName}, me.companyBio = ${me.companyBio}');
-        print('👤 DEBUG: me.bio = ${me.bio}, me.profileImageUrl = ${me.profileImageUrl}');
-        
-        if (me.id == companyUserId) {
-          setState(() {
-            _profile = me;
-          });
-          print('✅ DEBUG: Profile loaded successfully from getMe()');
-        } else {
-          print('❌ DEBUG: Not the current user (${me.id} != $companyUserId)');
-        }
-      }
+      setState(() {
+        _profile = profile;
+      });
     } catch (e) {
-      print('💥 DEBUG: Error loading profile: $e');
       if (!mounted) return;
       // If we can't load the profile, continue with the map data
     }
@@ -107,9 +74,6 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
   Widget build(BuildContext context) {
     final company = widget.company;
     final profile = _profile;
-    
-    print('DEBUG Build: profile = $profile');
-    print('DEBUG Build: company map = $company');
 
     // Use profile data when available, fallback to company map data
     final String username = (profile?.username.trim().isNotEmpty ?? false)
@@ -144,8 +108,6 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
     final List<InternshipPostDto> posts = _posts;
     final String displayUsername =
         username.isNotEmpty ? '@$username' : '@username';
-    
-    print('DEBUG Build: Final values - username: $username, companyName: $companyName, bio: $bio, profileImageUrl: $profileImageUrl');
 
     return Scaffold(
       backgroundColor: Colors.white,
