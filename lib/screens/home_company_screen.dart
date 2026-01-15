@@ -16,7 +16,7 @@ class HomeCompanyScreen extends StatefulWidget {
 }
 
 class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
-  String? _selectedDepartment;
+  Set<String> _selectedDepartments = {};
   bool _showFilter = false;
 
   bool _isLoading = true;
@@ -26,11 +26,24 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
 
   final List<String> departments = internshipDepartments;
 
+
   int _extractStudentId(CompanyCandidateDto candidate) =>
       candidate.studentUserId;
 
   int? _extractStudentPostId(CompanyCandidateDto candidate) =>
       candidate.studentPostId;
+
+  List<CompanyCandidateDto> get _filteredCandidates {
+  if (_selectedDepartments.isEmpty || _selectedDepartments.contains('All')) {
+    return _candidates;
+  }
+
+  return _candidates.where((candidate) {
+    final department = (candidate.department ?? '').trim();
+    return _selectedDepartments.contains(department);
+  }).toList();
+}
+
 
   @override
   void initState() {
@@ -249,14 +262,28 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
       ),
       child: ListView.builder(
         shrinkWrap: true,
+        padding: EdgeInsets.zero,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: departments.length,
         itemBuilder: (context, index) {
+          final dept = departments[index];
+          final isSelected = _selectedDepartments.contains(dept);
           return GestureDetector(
             onTap: () {
               setState(() {
-                _selectedDepartment = departments[index];
-                _showFilter = false;
+                if (dept == 'All') {
+                  // "All" is selected alone
+                  _selectedDepartments.clear();
+                  _selectedDepartments.add('All');
+                } else {
+                  // Remove "All" if selecting a specific department
+                  _selectedDepartments.remove('All');
+                  if (isSelected) {
+                    _selectedDepartments.remove(dept);
+                  } else {
+                    _selectedDepartments.add(dept);
+                  }
+                }
               });
             },
             child: Padding(
@@ -264,13 +291,26 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
                 horizontal: 16,
                 vertical: 10,
               ),
-              child: Text(
-                departments[index],
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.white,
-                  fontFamily: 'Trirong',
-                ),
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      dept,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -310,7 +350,9 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
       );
     }
 
-    if (_candidates.isEmpty) {
+    final items = _filteredCandidates;
+
+    if (items.isEmpty) {
       return const Padding(
         padding: EdgeInsets.only(top: 40),
         child: Center(
@@ -328,10 +370,10 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: _candidates.length,
+      itemCount: items.length,
       separatorBuilder: (context, index) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
-        return _buildCandidateCard(_candidates[index]);
+        return _buildCandidateCard(items[index]);
       },
     );
   }

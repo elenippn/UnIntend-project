@@ -14,7 +14,7 @@ class HomeStudentScreen extends StatefulWidget {
 }
 
 class _HomeStudentScreenState extends State<HomeStudentScreen> {
-  String? _selectedDepartment;
+  Set<String> _selectedDepartments = {};
   bool _showFilter = false;
 
   bool _isLoading = true;
@@ -27,6 +27,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   final Set<int> _savedPostIds = {};
 
   final List<String> departments = internshipDepartments;
+
 
   @override
   void initState() {
@@ -133,11 +134,19 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   }
 
   List<InternshipPostDto> get _filteredInternships {
-    // ΠΡΟΣΟΧΗ: το backend feed δεν έχει department από default στο seed.
-    // Οπότε εδώ κρατάμε το filter UI, αλλά δεν φιλτράρουμε πραγματικά
-    // μέχρι να προσθέσουμε πεδίο department/tag στο backend.
-    // Αν θες, μπορώ να σου δείξω πώς να το προσθέσουμε σωστά.
-    return _internships;
+    // Αν δεν έχει επιλεγεί φίλτρο ή είναι "All", δείξε όλα
+    if (_selectedDepartments.isEmpty || _selectedDepartments.contains('All')) {
+      return _internships;
+    }
+
+    // Φιλτράρουμε μόνο αν το DTO έχει department (αλλιώς θα βγει κενό)
+    return _internships.where((internship) {
+      final dept = (internship.department ?? '').trim();
+      if (dept.isEmpty) return true; // fallback: μην κρύβεις posts αν δεν υπάρχει department
+      return _selectedDepartments.contains(dept);
+    }).toList();
+  }
+
   }
 
   @override
@@ -319,14 +328,28 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
       ),
       child: ListView.builder(
         shrinkWrap: true,
+        padding: EdgeInsets.zero,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: departments.length,
         itemBuilder: (context, index) {
+          final dept = departments[index];
+          final isSelected = _selectedDepartments.contains(dept);
           return GestureDetector(
             onTap: () {
               setState(() {
-                _selectedDepartment = departments[index];
-                _showFilter = false;
+                if (dept == 'All') {
+                  // "All" is selected alone
+                  _selectedDepartments.clear();
+                  _selectedDepartments.add('All');
+                } else {
+                  // Remove "All" if selecting a specific department
+                  _selectedDepartments.remove('All');
+                  if (isSelected) {
+                    _selectedDepartments.remove(dept);
+                  } else {
+                    _selectedDepartments.add(dept);
+                  }
+                }
               });
             },
             child: Padding(
@@ -334,13 +357,26 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
                 horizontal: 16,
                 vertical: 10,
               ),
-              child: Text(
-                departments[index],
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.white,
-                  fontFamily: 'Trirong',
-                ),
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      dept,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           );

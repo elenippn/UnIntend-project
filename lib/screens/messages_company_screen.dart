@@ -14,7 +14,9 @@ class MessagesCompanyScreen extends StatefulWidget {
 
 class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
     with WidgetsBindingObserver {
-  String? _selectedFilter;
+  String _selectedFilter = 'All';
+
+
   bool _showFilter = false;
 
   bool _isLoading = true;
@@ -34,6 +36,16 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
     'DECLINED',
     'OTHER',
   ];
+
+  List<dynamic> get _filteredApplications {
+    if (_selectedFilter.isEmpty || _selectedFilter.contains('All')) {
+      return _applications;
+    }
+    return _applications.where((a) {
+      final status = (a['status'] ?? '').toString().toUpperCase();
+      return _selectedFilter.contains(status);
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -249,7 +261,7 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
               child: _buildFilterDropdown(),
             ),
 
-          // ✅ Bottom navigation FULL WIDTH όπως στο Home (χωρίς SafeArea μέσα)
+          // Bottom navigation FULL WIDTH όπως στο Home (χωρίς SafeArea μέσα)
           Positioned(
             bottom: 0,
             left: 0,
@@ -335,29 +347,48 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
       ),
       child: ListView.builder(
         shrinkWrap: true,
+        padding: EdgeInsets.zero,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: filters.length,
         itemBuilder: (context, index) {
+          final filter = filters[index];
+          final isSelected = _selectedFilter == filter;
+
           return GestureDetector(
             onTap: () {
               setState(() {
-                _selectedFilter = filters[index];
-                _showFilter = false;
+                _selectedFilter = filter; // single selection
+                _showFilter = false;      // προαιρετικό: κλείνει το dropdown μετά την επιλογή
               });
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Text(
-                filters[index],
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: Colors.white,
-                  fontFamily: 'Trirong',
-                ),
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      filter,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           );
         },
+
       ),
     );
   }
@@ -480,7 +511,7 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
     );
   }
 
-  // ✅ Navbar ίδιο με Home (χωρίς SafeArea wrapper)
+  
   Widget _buildBottomNavBar() {
     return Container(
       decoration: BoxDecoration(
@@ -549,23 +580,24 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
       );
     }
 
-    final filtered = _selectedFilter == null || _selectedFilter == 'All'
-        ? _applications
-        : _applications.where((a) {
-            if (a is! Map) return false;
-            final statusRaw = (a['status'] ?? '').toString();
-            final lastMessage = (a['lastMessage'] ?? '').toString();
-            final cidRaw = a['conversationId'];
-            final cid =
-                cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
-            final derived = deriveApplicationStatus(
-              applicationStatusRaw: statusRaw,
-              lastMessage: lastMessage,
-              lastSystemMessage:
-                  cid == null ? null : _conversationLastSystemText[cid],
-            );
-            return derived == _selectedFilter;
-          }).toList();
+final selected = _selectedFilter ?? 'All';
+
+final filtered = selected == 'All'
+    ? _applications
+    : _applications.where((a) {
+        if (a is! Map) return false;
+        final statusRaw = (a['status'] ?? '').toString();
+        final lastMessage = (a['lastMessage'] ?? '').toString();
+        final cidRaw = a['conversationId'];
+        final cid = cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
+        final derived = deriveApplicationStatus(
+          applicationStatusRaw: statusRaw,
+          lastMessage: lastMessage,
+          lastSystemMessage: cid == null ? null : _conversationLastSystemText[cid],
+        );
+        return derived == selected;
+      }).toList();
+
 
     if (filtered.isEmpty) {
       return const Center(
