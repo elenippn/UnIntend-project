@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import '../app_services.dart';
 import 'messages_company_screen.dart';
 import 'newpost_company_screen.dart';
+import '../models/company_candidate_dto.dart';
+import '../utils/api_error_message.dart';
+import '../utils/api_url.dart';
+import '../utils/internship_departments.dart';
+import '../widgets/app_cached_image.dart';
 
 class HomeCompanyScreen extends StatefulWidget {
   const HomeCompanyScreen({super.key});
@@ -16,46 +21,29 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
 
   bool _isLoading = true;
   String? _error;
-  List<dynamic> _candidates = [];
+  List<CompanyCandidateDto> _candidates = [];
   final Set<int> _savedCandidateIds = {};
 
-  final List<String> departments = [
-    'All',
-    'Human Resources (HR)',
-    'Marketing',
-    'Public Relations (PR)',
-    'Sales',
-    'Legal Department',
-    'IT',
-    'Supply Chain',
-    'Data Analytics',
-    'Product Management',
-    'Software Development',
-  ];
+  final List<String> departments = internshipDepartments;
 
-  int _extractStudentId(dynamic candidate) {
-    final raw = candidate['studentUserId'] ?? candidate['id'] ?? candidate['userId'];
-    if (raw is int) return raw;
-    return int.tryParse(raw?.toString() ?? '0') ?? 0;
-  }
-  
-  int? _extractStudentPostId(dynamic candidate) {
-    final raw = candidate['studentPostId'] ?? candidate['postId'];
-    if (raw is int) return raw;
-    return int.tryParse(raw?.toString() ?? '') ?? null;
+
+  int _extractStudentId(CompanyCandidateDto candidate) =>
+      candidate.studentUserId;
+
+  int? _extractStudentPostId(CompanyCandidateDto candidate) =>
+      candidate.studentPostId;
+
+  List<CompanyCandidateDto> get _filteredCandidates {
+  if (_selectedDepartments.isEmpty || _selectedDepartments.contains('All')) {
+    return _candidates;
   }
 
-  List<dynamic> get _filteredCandidates {
-    if (_selectedDepartments.isEmpty || _selectedDepartments.contains('All')) {
-      return _candidates;
-    }
-    // Filter by department field from backend
-    // NOTE: Requires backend to include 'department' field in feed responses
-    return _candidates.where((candidate) {
-      final department = candidate['department'] ?? '';
-      return _selectedDepartments.contains(department.toString());
-    }).toList();
-  }
+  return _candidates.where((candidate) {
+    final department = (candidate.department ?? '').trim();
+    return _selectedDepartments.contains(department);
+  }).toList();
+}
+
 
   @override
   void initState() {
@@ -74,9 +62,7 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
       if (!mounted) return;
       _savedCandidateIds
         ..clear()
-        ..addAll(data
-            .where((c) => (c['saved'] ?? false) == true)
-            .map<int>(_extractStudentId));
+        ..addAll(data.where((c) => c.saved).map<int>(_extractStudentId));
       setState(() {
         _candidates = data;
         _isLoading = false;
@@ -84,7 +70,7 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = friendlyApiError(e);
         _isLoading = false;
       });
     }
@@ -121,7 +107,11 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     }
   }
 
-  Future<void> _decide(int studentUserId, String decision) async {
+  Future<void> _decide(
+    int studentUserId,
+    String decision, {
+    int? studentPostId,
+  }) async {
     final index = _candidates.indexWhere(
       (c) => _extractStudentId(c) == studentUserId,
     );
@@ -134,7 +124,15 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     }
 
     try {
-      await AppServices.feed.decideOnStudent(studentUserId, decision);
+      if (studentPostId != null && studentPostId != 0) {
+        await AppServices.feed.decideOnStudentPost(studentPostId, decision);
+      } else {
+        await AppServices.feed.decideOnStudent(studentUserId, decision);
+      }
+
+      // Spec: after company LIKE/PASS, refresh /applications so pending/accepted/
+      // declined reflect immediately in Messages/Chat.
+      AppServices.events.applicationsChanged();
     } catch (e) {
       if (removed != null) {
         setState(() {
@@ -380,159 +378,212 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     );
   }
 
-  Widget _buildCandidateCard(dynamic candidate) {
+  Widget _buildCandidateCard(CompanyCandidateDto candidate) {
     final int studentUserId = _extractStudentId(candidate);
     final int? studentPostId = _extractStudentPostId(candidate);
-    final String name = (candidate['name'] ?? candidate['studentName'] ?? '') as String;
-    final String university = (candidate['university'] ?? '') as String;
-    final String department =
-        (candidate['department'] ?? candidate['major'] ?? candidate['skills'] ?? '') as String;
-    final String bio = (candidate['bio'] ?? candidate['description'] ?? '') as String;
-    final String skills = (candidate['skills'] ?? '') as String;
+    final String name = candidate.name;
+    final String bio = candidate.bio ?? '';
+    final String studies = candidate.studies ?? '';
+    final String skills = candidate.skills ?? '';
+    final String experience = candidate.experience ?? '';
+
+    final String studiesTitle = () {
+      final lines = studies
+          .split('\n')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      if (lines.isNotEmpty) return lines.first;
+      final fallback = (candidate.department ?? '').trim();
+      return fallback;
+    }();
+
+    final String? profileImageUrl = resolveApiUrl(
+      candidate.studentProfileImageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
     final bool isSaved = _savedCandidateIds.contains(studentUserId);
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: const Color(0xFF0D3B1A),
-          width: 2.5,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFF1B5E20),
-                    width: 1.5,
-                  ),
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.person,
-                    size: 18,
-                    color: Color(0xFF1B5E20),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name.isNotEmpty ? name : 'Candidate',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1B5E20),
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
-                    if (university.isNotEmpty)
-                      Text(
-                        university,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF1B5E20),
-                          fontFamily: 'Trirong',
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onDoubleTap: () =>
+          _toggleSave(studentUserId, studentPostId: studentPostId),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: const Color(0xFF0D3B1A),
+            width: 2.5,
           ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.grey[400],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Icon(
-                  Icons.image,
-                  color: Color(0xFFBDBDBD),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (department.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text(
-                          department,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1B5E20),
-                            fontFamily: 'Trirong',
-                          ),
-                        ),
-                      ),
-                    Text(
-                      bio.isNotEmpty ? bio : 'No bio provided',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF1B5E20),
-                        fontFamily: 'Trirong',
-                      ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF1B5E20),
+                      width: 1.5,
                     ),
-                    if (skills.isNotEmpty) ...[
-                      const SizedBox(height: 8),
+                  ),
+                  child: AppProfileAvatar(
+                    imageUrl: profileImageUrl,
+                    size: 32,
+                    fallbackIcon: Icons.person,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        skills,
+                        name.isNotEmpty ? name : 'Candidate',
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                           color: Color(0xFF1B5E20),
                           fontFamily: 'Trirong',
                         ),
                       ),
                     ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (studiesTitle.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  studiesTitle,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
+              ),
+            if (bio.isNotEmpty)
+              Text(
+                bio,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF1B5E20),
+                  fontFamily: 'Trirong',
+                ),
+              )
+            else
+              const Text(
+                'No bio provided',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF1B5E20),
+                  fontFamily: 'Trirong',
+                ),
+              ),
+            if (skills.isNotEmpty ||
+                studies.isNotEmpty ||
+                experience.isNotEmpty)
+              const SizedBox(height: 12),
+            if (skills.isNotEmpty) ...[
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                  children: [
+                    const TextSpan(
+                      text: 'Skills: ',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    TextSpan(text: skills),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (studies.isNotEmpty) ...[
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                  children: [
+                    const TextSpan(
+                      text: 'Studies: ',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    TextSpan(text: studies),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (experience.isNotEmpty) ...[
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                  children: [
+                    const TextSpan(
+                      text: 'Experience: ',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    TextSpan(text: experience),
                   ],
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              IconButton(
-                tooltip: 'Pass',
-                icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
-                onPressed: () => _decide(studentUserId, 'PASS'),
-              ),
-              IconButton(
-                tooltip: 'Like',
-                icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
-                onPressed: () => _decide(studentUserId, 'LIKE'),
-              ),
-              IconButton(
-                tooltip: 'Save',
-                icon: Icon(
-                  isSaved ? Icons.favorite : Icons.favorite_outline,
-                  color: const Color(0xFF1B5E20),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  tooltip: 'Pass',
+                  icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
+                  onPressed: () => _decide(
+                    studentUserId,
+                    'PASS',
+                    studentPostId: studentPostId,
+                  ),
                 ),
-                onPressed: () => _toggleSave(studentUserId, studentPostId: studentPostId),
-              ),
-            ],
-          ),
-        ],
+                IconButton(
+                  tooltip: 'Like',
+                  icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
+                  onPressed: () => _decide(
+                    studentUserId,
+                    'LIKE',
+                    studentPostId: studentPostId,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Save',
+                  icon: Icon(
+                    isSaved ? Icons.favorite : Icons.favorite_outline,
+                    color: const Color(0xFF1B5E20),
+                  ),
+                  onPressed: () =>
+                      _toggleSave(studentUserId, studentPostId: studentPostId),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

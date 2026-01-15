@@ -10,6 +10,22 @@ class ChatApi {
   }
 
   Future<void> sendMessage(int conversationId, String text) async {
-    await client.post('/conversations/$conversationId/messages', data: {"text": text});
+    await client.post('/conversations/$conversationId/messages',
+        data: {"text": text});
+  }
+
+  Future<void> markConversationRead(
+    int conversationId, {
+    int? lastReadMessageId,
+  }) async {
+    final data = lastReadMessageId == null
+        ? null
+        : {
+            'lastReadMessageId': lastReadMessageId,
+          };
+    await client.post(
+      '/conversations/$conversationId/read',
+      data: data,
+    );
   }
 }

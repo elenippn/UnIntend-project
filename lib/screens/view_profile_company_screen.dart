@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
+import '../models/internship_post_dto.dart';
+import '../utils/api_error_message.dart';
+import '../utils/api_url.dart';
+import '../widgets/app_cached_image.dart';
 
 class ViewProfileCompanyScreen extends StatefulWidget {
   final Map company;
@@ -7,11 +11,12 @@ class ViewProfileCompanyScreen extends StatefulWidget {
   const ViewProfileCompanyScreen({super.key, required this.company});
 
   @override
-  State<ViewProfileCompanyScreen> createState() => _ViewProfileCompanyScreenState();
+  State<ViewProfileCompanyScreen> createState() =>
+      _ViewProfileCompanyScreenState();
 }
 
 class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
-  List<dynamic> _posts = const [];
+  List<InternshipPostDto> _posts = const [];
   bool _loadingPosts = false;
   String? _postsError;
 
@@ -26,7 +31,8 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
     if (companyUserId == null) return;
     setState(() => _loadingPosts = true);
     try {
-      final res = await AppServices.posts.listCompanyPostsForUser(companyUserId);
+      final res =
+          await AppServices.posts.listCompanyPostsForUser(companyUserId);
       if (!mounted) return;
       setState(() {
         _posts = res;
@@ -37,7 +43,7 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
       if (!mounted) return;
       setState(() {
         _loadingPosts = false;
-        _postsError = e.toString();
+        _postsError = friendlyApiError(e);
       });
     }
   }
@@ -46,15 +52,11 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
   Widget build(BuildContext context) {
     final company = widget.company;
     final String username = (company['username'] ?? '') as String;
-    final String companyName = (
-      company['companyName'] ??
-      company['name'] ??
-      ''
-    ) as String;
-    final String bio = (company['bio'] ?? company['description'] ?? '') as String;
-    final List<dynamic> posts = _posts.isNotEmpty
-        ? _posts
-        : (company['posts'] ?? company['companyPosts'] ?? const []) as List<dynamic>;
+    final String companyName =
+        (company['companyName'] ?? company['name'] ?? '') as String;
+    final String bio =
+        (company['bio'] ?? company['description'] ?? '') as String;
+    final List<InternshipPostDto> posts = _posts;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -65,12 +67,14 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
               SafeArea(bottom: false, child: _buildHeader(context)),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 32, left: 16, right: 16, top: 24),
+                  padding: const EdgeInsets.only(
+                      bottom: 32, left: 16, right: 16, top: 24),
                   child: Column(
                     children: [
                       _buildUserInfo(companyName, username),
                       const SizedBox(height: 20),
-                      _buildCard('About/Bio', bio.isNotEmpty ? bio : 'No bio provided'),
+                      _buildCard('About/Bio',
+                          bio.isNotEmpty ? bio : 'No bio provided'),
                       const SizedBox(height: 12),
                       if (_loadingPosts)
                         const Padding(
@@ -78,7 +82,8 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
                           child: CircularProgressIndicator(),
                         )
                       else if (_postsError != null)
-                        _buildCard('Available Internship ads', 'Could not load: $_postsError')
+                        _buildCard('Available Internship ads',
+                            'Could not load: $_postsError')
                       else
                         _buildPosts(posts),
                     ],
@@ -126,7 +131,8 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
   }
 
   Widget _buildUserInfo(String companyName, String username) {
-    final String displayUsername = username.isNotEmpty ? '@$username' : '@username';
+    final String displayUsername =
+        username.isNotEmpty ? '@$username' : '@username';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -215,7 +221,7 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
     );
   }
 
-  Widget _buildPosts(List<dynamic> posts) {
+  Widget _buildPosts(List<InternshipPostDto> posts) {
     if (posts.isEmpty) {
       return _buildCard('Available Internship ads', 'No internship ads listed');
     }
@@ -236,16 +242,16 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        ...posts.map((p) {
-          final String title = (p['title'] ?? p['name'] ?? 'Internship') as String;
-          final String description = (p['description'] ?? '') as String;
-          return _buildPostCard(title, description);
-        }).toList(),
+        ...posts.map(_buildPostCard).toList(),
       ],
     );
   }
 
-  Widget _buildPostCard(String title, String description) {
+  Widget _buildPostCard(InternshipPostDto post) {
+    final String? imageUrl = resolveApiUrl(
+      post.imageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
@@ -258,7 +264,7 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            title,
+            post.title,
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -267,8 +273,15 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
             ),
           ),
           const SizedBox(height: 6),
+          AppCachedImage(
+            imageUrl: imageUrl,
+            width: double.infinity,
+            height: 160,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          const SizedBox(height: 6),
           Text(
-            description.isNotEmpty ? description : 'No description',
+            post.description.isNotEmpty ? post.description : 'No description',
             style: const TextStyle(
               fontSize: 13,
               color: Colors.black87,

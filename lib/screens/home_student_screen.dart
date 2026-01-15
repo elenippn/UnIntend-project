@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart'; // άλλαξε path αν χρειάζεται
+import '../models/internship_post_dto.dart';
+import '../utils/api_error_message.dart';
+import '../utils/api_url.dart';
+import '../utils/internship_departments.dart';
+import '../widgets/app_cached_image.dart';
 
 class HomeStudentScreen extends StatefulWidget {
   const HomeStudentScreen({super.key});
@@ -16,24 +21,13 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   String? _error;
 
   // Θα γεμίσει από backend (/feed/student)
-  List<dynamic> _internships = [];
+  List<InternshipPostDto> _internships = [];
 
   // Local "saved" state (για να αλλάζει το icon άμεσα)
   final Set<int> _savedPostIds = {};
 
-  final List<String> departments = [
-    'All',
-    'Human Resources (HR)',
-    'Marketing',
-    'Public Relations (PR)',
-    'Sales',
-    'Legal Department',
-    'IT',
-    'Supply Chain',
-    'Data Analytics',
-    'Product Management',
-    'Software Development',
-  ];
+  final List<String> departments = internshipDepartments;
+
 
   @override
   void initState() {
@@ -56,14 +50,14 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
         _internships = data;
         _savedPostIds
           ..clear()
-          ..addAll(data.where((p) => (p['saved'] ?? false) == true).map<int>((p) => (p['id'] as int)));
+          ..addAll(data.where((p) => p.saved).map<int>((p) => p.id));
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _error = e.toString();
+        _error = friendlyApiError(e);
         _isLoading = false;
       });
     }
@@ -103,9 +97,11 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   // (προαιρετικό) like/pass με κουμπιά ή swipe later
   Future<void> _decide(int postId, String decision) async {
     // optimistic: remove card from UI
-    final index = _internships.indexWhere((p) => (p['id'] as int) == postId);
-    dynamic removed;
+    final index = _internships.indexWhere((p) => p.id == postId);
+    int? removedIndex;
+    InternshipPostDto? removed;
     if (index != -1) {
+      removedIndex = index;
       removed = _internships[index];
       setState(() {
         _internships.removeAt(index);
@@ -114,11 +110,20 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
 
     try {
       await AppServices.feed.decideOnPost(postId, decision);
+
+      // Spec: after LIKE, refresh /applications so Messages/Chat can show
+      // pending/declined immediately. For PASS we do nothing (no chat created).
+      if (decision.toUpperCase() == 'LIKE') {
+        AppServices.events.applicationsChanged();
+      }
     } catch (e) {
       // revert if failed
-      if (removed != null) {
+      final restored = removed;
+      final restoredIndex = removedIndex;
+      if (restored != null && restoredIndex != null) {
+        final safeIndex = restoredIndex.clamp(0, _internships.length);
         setState(() {
-          _internships.insert(index, removed);
+          _internships.insert(safeIndex, restored);
         });
       }
       if (!mounted) return;
@@ -128,16 +133,20 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     }
   }
 
-  List<dynamic> get _filteredInternships {
+  List<InternshipPostDto> get _filteredInternships {
+    // Αν δεν έχει επιλεγεί φίλτρο ή είναι "All", δείξε όλα
     if (_selectedDepartments.isEmpty || _selectedDepartments.contains('All')) {
       return _internships;
     }
-    // Filter by department field from backend
-    // NOTE: Requires backend to include 'department' field in feed responses
+
+    // Φιλτράρουμε μόνο αν το DTO έχει department (αλλιώς θα βγει κενό)
     return _internships.where((internship) {
-      final department = internship['department'] ?? '';
-      return _selectedDepartments.contains(department.toString());
+      final dept = (internship.department ?? '').trim();
+      if (dept.isEmpty) return true; // fallback: μην κρύβεις posts αν δεν υπάρχει department
+      return _selectedDepartments.contains(dept);
     }).toList();
+  }
+
   }
 
   @override
@@ -376,168 +385,175 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     );
   }
 
-  Widget _buildInternshipCard(dynamic internship) {
-    // Expecting backend fields like: id, companyName, title, description, location
-    final int postId = (internship['id'] as int);
-    final String companyName = (internship['companyName'] ?? 'Company') as String;
-    final String title = (internship['title'] ?? '') as String;
-    final String description = (internship['description'] ?? '') as String;
-    final String location = (internship['location'] ?? '') as String;
+  Widget _buildInternshipCard(InternshipPostDto internship) {
+    final int postId = internship.id;
+    final String companyName = internship.companyName?.isNotEmpty == true
+        ? internship.companyName!
+        : 'Company';
+    final String title = internship.title;
+    final String description = internship.description;
+    final String location = internship.location ?? '';
+    final String? imageUrl = resolveApiUrl(
+      internship.imageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
+
+    final String? companyProfileImageUrl = resolveApiUrl(
+      internship.profileImageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
 
     final bool isSaved = _savedPostIds.contains(postId);
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: const Color(0xFF0D3B1A),
-          width: 2.5,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFF1B5E20),
-                    width: 1.5,
-                  ),
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.person,
-                    size: 18,
-                    color: Color(0xFF1B5E20),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                companyName,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1B5E20),
-                  fontFamily: 'Trirong',
-                ),
-              ),
-            ],
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onDoubleTap: () => _toggleSave(postId),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: const Color(0xFF0D3B1A),
+            width: 2.5,
           ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.grey[400],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF1B5E20),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: AppProfileAvatar(
+                    imageUrl: companyProfileImageUrl,
+                    size: 32,
+                    fallbackIcon: Icons.business,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  companyName,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppCachedImage(
+                  imageUrl: imageUrl,
+                  width: 60,
+                  height: 60,
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Icon(
-                  Icons.image,
-                  color: Color(0xFFBDBDBD),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (title.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1B5E20),
-                            fontFamily: 'Trirong',
-                          ),
-                        ),
-                      ),
-                    Text(
-                      description,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF1B5E20),
-                        fontFamily: 'Trirong',
-                      ),
-                    ),
-                    if (location.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on, size: 14, color: Color(0xFF1B5E20)),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              location,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF1B5E20),
-                                fontFamily: 'Trirong',
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (title.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1B5E20),
+                              fontFamily: 'Trirong',
                             ),
                           ),
-                        ],
+                        ),
+                      Text(
+                        description,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF1B5E20),
+                          fontFamily: 'Trirong',
+                        ),
                       ),
-                    ],
-                    const SizedBox(height: 8),
-                    Row(
-                      children: List.generate(
-                        3,
-                        (i) => Expanded(
-                          child: Container(
-                            height: 4,
-                            margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
-                            color: Colors.grey[400],
+                      if (location.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on,
+                                size: 14, color: Color(0xFF1B5E20)),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                location,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF1B5E20),
+                                  fontFamily: 'Trirong',
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: List.generate(
+                          3,
+                          (i) => Expanded(
+                            child: Container(
+                              height: 4,
+                              margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
+                              color: Colors.grey[400],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+              ],
+            ),
+            const SizedBox(height: 12),
 
-          // Actions row (προσωρινό like/pass + save)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              IconButton(
-                tooltip: "Pass",
-                icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
-                onPressed: () => _decide(postId, "PASS"),
-              ),
-              IconButton(
-                tooltip: "Like",
-                icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
-                onPressed: () => _decide(postId, "LIKE"),
-              ),
-              IconButton(
-                tooltip: "Save",
-                icon: Icon(
-                  isSaved ? Icons.favorite : Icons.favorite_outline,
-                  color: const Color(0xFF1B5E20),
+            // Actions row (προσωρινό like/pass + save)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  tooltip: "Pass",
+                  icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
+                  onPressed: () => _decide(postId, "PASS"),
                 ),
-                onPressed: () => _toggleSave(postId),
-              ),
-            ],
-          ),
-        ],
+                IconButton(
+                  tooltip: "Like",
+                  icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
+                  onPressed: () => _decide(postId, "LIKE"),
+                ),
+                IconButton(
+                  tooltip: "Save",
+                  icon: Icon(
+                    isSaved ? Icons.favorite : Icons.favorite_outline,
+                    color: const Color(0xFF1B5E20),
+                  ),
+                  onPressed: () => _toggleSave(postId),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

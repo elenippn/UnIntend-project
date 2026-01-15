@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
+import '../utils/api_error_message.dart';
 import 'home_company_screen.dart';
 
 class SignUpCompanyScreen extends StatefulWidget {
@@ -70,7 +71,8 @@ class _SignUpCompanyScreenState extends State<SignUpCompanyScreen> {
               const SizedBox(height: 12),
               _buildTextField('Email', _emailController),
               const SizedBox(height: 12),
-              _buildTextField('Password', _passwordController, isPassword: true),
+              _buildTextField('Password', _passwordController,
+                  isPassword: true),
               const SizedBox(height: 12),
               _buildTextField('Re-write Password', _confirmPasswordController,
                   isPassword: true),
@@ -219,7 +221,8 @@ class _SignUpCompanyScreenState extends State<SignUpCompanyScreen> {
     final confirm = _confirmPasswordController.text;
     final role = _selectedRole;
 
-    if ([name, surname, username, email, password, confirm].any((v) => v.isEmpty)) {
+    if ([name, surname, username, email, password, confirm]
+        .any((v) => v.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all fields')),
       );
@@ -245,16 +248,18 @@ class _SignUpCompanyScreenState extends State<SignUpCompanyScreen> {
 
       final me = await AppServices.auth.getMe();
       if (!mounted) return;
-      final resolvedRole = (me['role'] ?? role).toString().toUpperCase();
+      final resolvedRole = (me.role ?? role).toUpperCase();
       if (resolvedRole == 'COMPANY') {
-        Navigator.of(context).pushNamedAndRemoveUntil('/home_company', (_) => false);
+        Navigator.of(context)
+            .pushNamedAndRemoveUntil('/home_company', (_) => false);
       } else {
-        Navigator.of(context).pushNamedAndRemoveUntil('/home_student', (_) => false);
+        Navigator.of(context)
+            .pushNamedAndRemoveUntil('/home_student', (_) => false);
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign up failed: $e')),
+        SnackBar(content: Text('Sign up failed: ${friendlyApiError(e)}')),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
