@@ -10,7 +10,8 @@ class SavedListingsStudentScreen extends StatefulWidget {
       _SavedListingsStudentScreenState();
 }
 
-class _SavedListingsStudentScreenState extends State<SavedListingsStudentScreen> {
+class _SavedListingsStudentScreenState
+    extends State<SavedListingsStudentScreen> {
   bool _isLoading = true;
   String? _error;
   List<dynamic> _saved = [];
@@ -45,7 +46,8 @@ class _SavedListingsStudentScreenState extends State<SavedListingsStudentScreen>
 
   Future<void> _removeFromSaved(int postId) async {
     // optimistic remove
-    final idx = _saved.indexWhere((x) => ((x['postId'] ?? x['id']) as int) == postId);
+    final idx =
+        _saved.indexWhere((x) => ((x['postId'] ?? x['id']) as int) == postId);
     if (idx == -1) return;
     final removed = _saved[idx];
 
@@ -63,6 +65,52 @@ class _SavedListingsStudentScreenState extends State<SavedListingsStudentScreen>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not remove: $e')),
+      );
+    }
+  }
+
+  Future<void> _decideOnSaved(int postId, String decision) async {
+    // optimistic: remove card from UI
+    final idx =
+        _saved.indexWhere((x) => ((x['postId'] ?? x['id']) as int) == postId);
+    dynamic removed;
+    int? removedIndex;
+    if (idx != -1) {
+      removedIndex = idx;
+      removed = _saved[idx];
+      setState(() {
+        _saved.removeAt(idx);
+      });
+    }
+
+    try {
+      await AppServices.feed.decideOnPost(postId, decision);
+
+      // After LIKE, refresh /applications so Messages/Chat can show
+      if (decision.toUpperCase() == 'LIKE') {
+        AppServices.events.applicationsChanged();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Internship liked! Check your messages."),
+              duration: Duration(seconds: 2),
+              backgroundColor: Color(0xFF4CAF50),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // revert if failed
+      if (removed != null && removedIndex != null) {
+        final safeIndex = removedIndex.clamp(0, _saved.length);
+        setState(() {
+          _saved.insert(safeIndex, removed);
+        });
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Could not send decision: $e")),
       );
     }
   }
@@ -138,7 +186,8 @@ class _SavedListingsStudentScreenState extends State<SavedListingsStudentScreen>
     return RefreshIndicator(
       onRefresh: _loadSaved,
       child: ListView.builder(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
+        padding:
+            const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
         itemCount: _saved.length,
         itemBuilder: (context, index) {
           final item = _saved[index];
@@ -157,6 +206,7 @@ class _SavedListingsStudentScreenState extends State<SavedListingsStudentScreen>
             position: title,
             location: location,
             description: description,
+            postId: postId,
             onUnsave: () => _removeFromSaved(postId),
           );
         },
@@ -199,106 +249,132 @@ class _SavedListingsStudentScreenState extends State<SavedListingsStudentScreen>
     required String position,
     required String location,
     required String description,
+    required int postId,
     required VoidCallback onUnsave,
   }) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        company,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1B5E20),
-                          fontFamily: 'Trirong',
+    return Dismissible(
+      key: Key('saved_$postId'),
+      direction: DismissDirection.startToEnd, // Swipe right
+      confirmDismiss: (direction) async {
+        // Swipe right = LIKE
+        await _decideOnSaved(postId, "LIKE");
+        return true;
+      },
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF4CAF50), // Πράσινο για LIKE
+          borderRadius: BorderRadius.circular(12),
+        ),
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        child: const Icon(
+          Icons.favorite,
+          color: Colors.white,
+          size: 32,
+        ),
+      ),
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 16),
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          company,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1B5E20),
+                            fontFamily: 'Trirong',
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        position,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1B5E20),
-                          fontFamily: 'Trirong',
+                        const SizedBox(height: 4),
+                        Text(
+                          position,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1B5E20),
+                            fontFamily: 'Trirong',
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.favorite, color: Color(0xFF1B5E20)),
-                  onPressed: onUnsave,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.location_on, size: 16, color: Color(0xFF1B5E20)),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    location,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      fontFamily: 'Trirong',
+                      ],
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              description,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-                fontFamily: 'Trirong',
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1B5E20),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ViewProfileCompanyScreen(company: listing),
+                  IconButton(
+                    icon: const Icon(Icons.favorite, color: Color(0xFF1B5E20)),
+                    onPressed: onUnsave,
                   ),
-                );
-              },
-              child: const Text(
-                'View Details',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(Icons.location_on,
+                      size: 16, color: Color(0xFF1B5E20)),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      location,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                description,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.black87,
                   fontFamily: 'Trirong',
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1B5E20),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ViewProfileCompanyScreen(company: listing),
+                    ),
+                  );
+                },
+                child: const Text(
+                  'View Details',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontFamily: 'Trirong',
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
