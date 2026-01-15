@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
+import '../models/auth_me_dto.dart';
 import '../models/internship_post_dto.dart';
 import '../utils/api_error_message.dart';
 import '../utils/api_url.dart';
@@ -16,6 +17,8 @@ class ViewProfileCompanyScreen extends StatefulWidget {
 }
 
 class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
+  AuthMeDto? _profile;
+
   List<InternshipPostDto> _posts = const [];
   bool _loadingPosts = false;
   String? _postsError;
@@ -23,7 +26,59 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
   @override
   void initState() {
     super.initState();
+    _loadProfile();
     _maybeLoadPosts();
+  }
+
+  Future<void> _loadProfile() async {
+    final int? companyUserId = _extractCompanyUserId(widget.company);
+    print('🔍 DEBUG: companyUserId = $companyUserId');
+    print('🔍 DEBUG: company map keys = ${widget.company.keys.toList()}');
+    print('🔍 DEBUG: company map values = ${widget.company}');
+    
+    if (companyUserId == null) {
+      print('❌ DEBUG: companyUserId is null, cannot load profile');
+      return;
+    }
+
+    try {
+      // Try to get the company profile using the new API method
+      print('🔄 DEBUG: Trying API endpoints...');
+      final profile = await AppServices.profiles.getCompanyProfile(companyUserId);
+      if (!mounted) return;
+      
+      if (profile != null) {
+        setState(() {
+          _profile = profile;
+        });
+        print('✅ DEBUG: Profile loaded successfully from API');
+        print('📋 DEBUG: profile.username = ${profile.username}, profile.companyName = ${profile.companyName}');
+        print('📋 DEBUG: profile.companyBio = ${profile.companyBio}');
+        print('📋 DEBUG: profile.bio = ${profile.bio}');
+        print('📋 DEBUG: profile.profileImageUrl = ${profile.profileImageUrl}');
+      } else {
+        print('⚠️ DEBUG: No profile found via API, trying getMe()...');
+        
+        // Fallback: Try to get the company profile if it's the current user
+        final me = await AppServices.auth.getMe();
+        print('👤 DEBUG: me.id = ${me.id}, me.username = ${me.username}');
+        print('👤 DEBUG: me.companyName = ${me.companyName}, me.companyBio = ${me.companyBio}');
+        print('👤 DEBUG: me.bio = ${me.bio}, me.profileImageUrl = ${me.profileImageUrl}');
+        
+        if (me.id == companyUserId) {
+          setState(() {
+            _profile = me;
+          });
+          print('✅ DEBUG: Profile loaded successfully from getMe()');
+        } else {
+          print('❌ DEBUG: Not the current user (${me.id} != $companyUserId)');
+        }
+      }
+    } catch (e) {
+      print('💥 DEBUG: Error loading profile: $e');
+      if (!mounted) return;
+      // If we can't load the profile, continue with the map data
+    }
   }
 
   Future<void> _maybeLoadPosts() async {
@@ -51,12 +106,46 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
   @override
   Widget build(BuildContext context) {
     final company = widget.company;
-    final String username = (company['username'] ?? '') as String;
+    final profile = _profile;
+    
+    print('DEBUG Build: profile = $profile');
+    print('DEBUG Build: company map = $company');
+
+    // Use profile data when available, fallback to company map data
+    final String username = (profile?.username.trim().isNotEmpty ?? false)
+        ? profile!.username
+        : (company['username'] ?? '') as String;
+
     final String companyName =
-        (company['companyName'] ?? company['name'] ?? '') as String;
-    final String bio =
-        (company['bio'] ?? company['description'] ?? '') as String;
+        (profile?.companyName?.trim().isNotEmpty ?? false)
+            ? profile!.companyName!
+            : (profile?.name?.trim().isNotEmpty ?? false)
+                ? profile!.name
+                : (company['companyName'] ?? company['name'] ?? '') as String;
+
+    final String bio = (profile?.companyBio?.trim().isNotEmpty ?? false)
+        ? profile!.companyBio!
+        : (profile?.bio?.trim().isNotEmpty ?? false)
+            ? profile!.bio!
+            : (company['bio'] ??
+                company['companyBio'] ??
+                company['description'] ??
+                '') as String;
+
+    final dynamic rawMapProfileImageUrl =
+        company['profileImageUrl'] ?? company['companyProfileImageUrl'];
+    final String? mapProfileImageUrl =
+        rawMapProfileImageUrl is String ? rawMapProfileImageUrl : null;
+    final String? profileImageUrl = resolveApiUrl(
+      profile?.profileImageUrl ?? mapProfileImageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
+
     final List<InternshipPostDto> posts = _posts;
+    final String displayUsername =
+        username.isNotEmpty ? '@$username' : '@username';
+    
+    print('DEBUG Build: Final values - username: $username, companyName: $companyName, bio: $bio, profileImageUrl: $profileImageUrl');
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -71,11 +160,11 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
                       bottom: 32, left: 16, right: 16, top: 24),
                   child: Column(
                     children: [
-                      _buildUserInfo(companyName, username),
+                      _buildUserInfo(
+                          companyName, displayUsername, profileImageUrl),
                       const SizedBox(height: 20),
-                      _buildCard('About/Bio',
-                          bio.isNotEmpty ? bio : 'No bio provided'),
-                      const SizedBox(height: 12),
+                      _buildAboutSection(bio),
+                      const SizedBox(height: 16),
                       if (_loadingPosts)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 8),
@@ -85,7 +174,7 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
                         _buildCard('Available Internship ads',
                             'Could not load: $_postsError')
                       else
-                        _buildPosts(posts),
+                        _buildAvailableInternshipsSection(posts),
                     ],
                   ),
                 ),
@@ -130,60 +219,66 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
     );
   }
 
-  Widget _buildUserInfo(String companyName, String username) {
-    final String displayUsername =
-        username.isNotEmpty ? '@$username' : '@username';
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: const Color(0xFF1B5E20),
-              width: 2,
-            ),
-          ),
-          child: const Center(
-            child: Text(
-              'logo',
-              style: TextStyle(
-                color: Color(0xFF1B5E20),
-                fontFamily: 'Trirong',
+  Widget _buildUserInfo(
+      String companyName, String displayUsername, String? profileImageUrl) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: const Color(0xFF1B5E20),
+                width: 2,
               ),
             ),
+            child: profileImageUrl != null
+                ? AppProfileAvatar(
+                    imageUrl: profileImageUrl,
+                    size: 80,
+                    fallbackIcon: Icons.business,
+                  )
+                : const Center(
+                    child: Icon(
+                      Icons.business,
+                      size: 40,
+                      color: Color(0xFF1B5E20),
+                    ),
+                  ),
           ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 4),
-              Text(
-                displayUsername,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF1B5E20),
-                  fontFamily: 'Trirong',
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Text(
+                  displayUsername,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                companyName.isNotEmpty ? companyName : 'Company Name',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1B5E20),
-                  fontFamily: 'Trirong',
+                const SizedBox(height: 8),
+                Text(
+                  companyName.isNotEmpty ? companyName : 'Company Name',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -221,18 +316,24 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
     );
   }
 
-  Widget _buildPosts(List<InternshipPostDto> posts) {
-    if (posts.isEmpty) {
-      return _buildCard('Available Internship ads', 'No internship ads listed');
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Available Internship ads',
+  Widget _buildAboutSection(String bio) {
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 120),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: const Color(0xFF1B5E20),
+          width: 2,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          const Text(
+            'About/Bio',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -240,8 +341,62 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
               fontFamily: 'Trirong',
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            bio.isNotEmpty ? bio : 'No bio yet',
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF1B5E20),
+              fontFamily: 'Trirong',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvailableInternshipsSection(List<InternshipPostDto> posts) {
+    if (posts.isEmpty) {
+      return SizedBox(
+        width: double.infinity,
+        height: 150,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: const Color(0xFF1B5E20),
+              width: 2,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: const Center(
+            child: Text(
+              'No posts yet',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1B5E20),
+                fontFamily: 'Trirong',
+              ),
+            ),
+          ),
         ),
-        const SizedBox(height: 8),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Available Internship ads',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1B5E20),
+            fontFamily: 'Trirong',
+          ),
+        ),
+        const SizedBox(height: 12),
         ...posts.map(_buildPostCard).toList(),
       ],
     );

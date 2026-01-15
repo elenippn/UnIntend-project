@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../app_services.dart';
+import '../models/internship_post_dto.dart';
+import '../utils/api_error_message.dart';
+import 'view_profile_company_screen.dart';
 
 class SearchStudentScreen extends StatefulWidget {
   const SearchStudentScreen({super.key});
@@ -14,8 +17,8 @@ class _SearchStudentScreenState extends State<SearchStudentScreen> {
   bool _isSearching = false;
   Timer? _debounceTimer;
   
-  List<dynamic> _allPosts = [];
-  List<dynamic> _filteredPosts = [];
+  List<InternshipPostDto> _allPosts = [];
+  List<InternshipPostDto> _filteredPosts = [];
   String? _error;
 
   @override
@@ -31,6 +34,7 @@ class _SearchStudentScreenState extends State<SearchStudentScreen> {
 
     try {
       final posts = await AppServices.feed.getStudentFeed();
+      print('🔍 Search Screen: Loaded ${posts.length} posts');
       if (!mounted) return;
       setState(() {
         _allPosts = posts;
@@ -38,13 +42,13 @@ class _SearchStudentScreenState extends State<SearchStudentScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = friendlyApiError(e);
       });
+      print('❌ Search Screen Error: $_error');
     }
   }
 
   void _performSearch(String query) {
-    // Cancel previous timer
     _debounceTimer?.cancel();
     
     setState(() {
@@ -58,18 +62,44 @@ class _SearchStudentScreenState extends State<SearchStudentScreen> {
       return;
     }
 
-    // Start new timer - search after 500ms of inactivity
     _debounceTimer = Timer(const Duration(milliseconds: 500), () {
       final lowerQuery = query.toLowerCase();
+      print('\n🔎 SEARCHING for: "$query"');
+      print('   Total posts to search: ${_allPosts.length}');
+      
+      final results = _allPosts.where((post) {
+        // Ψάχνουμε σε όλα τα σημαντικά fields
+        final title = post.title.toLowerCase();
+        final description = post.description.toLowerCase();
+        final companyName = (post.companyName ?? '').toLowerCase();
+        final department = (post.department ?? '').toLowerCase();
+        final location = (post.location ?? '').toLowerCase();
+        
+        // Check if query matches any field
+        final matches = title.contains(lowerQuery) ||
+            description.contains(lowerQuery) ||
+            companyName.contains(lowerQuery) ||
+            department.contains(lowerQuery) ||
+            location.contains(lowerQuery);
+        
+        if (matches) {
+          print('   ✅ MATCH: "${post.title}"');
+          final matchedIn = <String>[];
+          if (title.contains(lowerQuery)) matchedIn.add('title');
+          if (description.contains(lowerQuery)) matchedIn.add('description');
+          if (companyName.contains(lowerQuery)) matchedIn.add('company');
+          if (department.contains(lowerQuery)) matchedIn.add('department');
+          if (location.contains(lowerQuery)) matchedIn.add('location');
+          print('      └─ Matched in: ${matchedIn.join(", ")}');
+        }
+        
+        return matches;
+      }).toList();
+      
+      print('   Results found: ${results.length}\n');
+      
       setState(() {
-        _filteredPosts = _allPosts.where((post) {
-          final title = (post['title'] ?? '').toString().toLowerCase();
-          final description = (post['description'] ?? '').toString().toLowerCase();
-          final companyName = (post['companyName'] ?? '').toString().toLowerCase();
-          return title.contains(lowerQuery) ||
-              description.contains(lowerQuery) ||
-              companyName.contains(lowerQuery);
-        }).toList();
+        _filteredPosts = results;
       });
     });
   }
@@ -173,69 +203,151 @@ class _SearchStudentScreenState extends State<SearchStudentScreen> {
     );
   }
 
-  Widget _buildSearchResultCard(dynamic result) {
-    final String title = result['title'] ?? result['companyName'] ?? 'Post';
-    final String description = result['description'] ?? '';
-    final String? location = result['location'];
+  Widget _buildSearchResultCard(InternshipPostDto result) {
+    final String title = result.title;
+    final String description = result.description;
+    final String? location = result.location;
+    final String? companyName = result.companyName;
+    final String? department = result.department;
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: const Color(0xFF1B5E20),
-          width: 2,
+    return GestureDetector(
+      onLongPress: () {
+        // View company profile
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ViewProfileCompanyScreen(
+              company: {
+                'companyName': companyName,
+                'userId': result.companyUserId,
+              },
+            ),
+          ),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: const Color(0xFF1B5E20),
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(8),
         ),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1B5E20),
-              fontFamily: 'Trirong',
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            description,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF1B5E20),
-              fontFamily: 'Trirong',
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (location != null) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(
-                  Icons.location_on,
-                  size: 14,
-                  color: Color(0xFF1B5E20),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    location,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF1B5E20),
-                      fontFamily: 'Trirong',
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Company name
+            if (companyName != null && companyName.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ViewProfileCompanyScreen(
+                          company: {
+                            'companyName': companyName,
+                            'userId': result.companyUserId,
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          companyName,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1B5E20),
+                            fontFamily: 'Trirong',
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward,
+                        size: 16,
+                        color: Color(0xFF1B5E20),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
+            // Title
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1B5E20),
+                fontFamily: 'Trirong',
+              ),
             ),
+            const SizedBox(height: 8),
+            // Description
+            Text(
+              description,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF1B5E20),
+                fontFamily: 'Trirong',
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            // Department badge
+            if (department != null && department.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFAFD9F),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text(
+                  department,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
+              ),
+            ],
+            // Location
+            if (location != null && location.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.location_on,
+                    size: 14,
+                    color: Color(0xFF1B5E20),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      location,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
