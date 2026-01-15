@@ -55,8 +55,15 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
     final String companyName =
         (company['companyName'] ?? company['name'] ?? '') as String;
     final String bio =
-        (company['bio'] ?? company['description'] ?? '') as String;
+        (company['bio'] ?? company['companyBio'] ?? company['description'] ?? '') as String;
+    final dynamic rawProfileImageUrl =
+        company['profileImageUrl'] ?? company['companyProfileImageUrl'];
+    final String? profileImageUrl = rawProfileImageUrl is String
+        ? resolveApiUrl(rawProfileImageUrl, baseUrl: AppServices.baseUrl)
+        : null;
     final List<InternshipPostDto> posts = _posts;
+    final String displayUsername =
+        username.isNotEmpty ? '@$username' : '@username';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -71,11 +78,10 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
                       bottom: 32, left: 16, right: 16, top: 24),
                   child: Column(
                     children: [
-                      _buildUserInfo(companyName, username),
+                      _buildUserInfo(companyName, displayUsername, profileImageUrl),
                       const SizedBox(height: 20),
-                      _buildCard('About/Bio',
-                          bio.isNotEmpty ? bio : 'No bio provided'),
-                      const SizedBox(height: 12),
+                      _buildAboutSection(bio),
+                      const SizedBox(height: 16),
                       if (_loadingPosts)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 8),
@@ -85,7 +91,7 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
                         _buildCard('Available Internship ads',
                             'Could not load: $_postsError')
                       else
-                        _buildPosts(posts),
+                        _buildAvailableInternshipsSection(posts),
                     ],
                   ),
                 ),
@@ -130,60 +136,65 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
     );
   }
 
-  Widget _buildUserInfo(String companyName, String username) {
-    final String displayUsername =
-        username.isNotEmpty ? '@$username' : '@username';
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: const Color(0xFF1B5E20),
-              width: 2,
-            ),
-          ),
-          child: const Center(
-            child: Text(
-              'logo',
-              style: TextStyle(
-                color: Color(0xFF1B5E20),
-                fontFamily: 'Trirong',
+  Widget _buildUserInfo(String companyName, String displayUsername, String? profileImageUrl) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: const Color(0xFF1B5E20),
+                width: 2,
               ),
             ),
+            child: profileImageUrl != null
+                ? AppProfileAvatar(
+                    imageUrl: profileImageUrl,
+                    size: 80,
+                    fallbackIcon: Icons.business,
+                  )
+                : const Center(
+                    child: Icon(
+                      Icons.business,
+                      size: 40,
+                      color: Color(0xFF1B5E20),
+                    ),
+                  ),
           ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 4),
-              Text(
-                displayUsername,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF1B5E20),
-                  fontFamily: 'Trirong',
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Text(
+                  displayUsername,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                companyName.isNotEmpty ? companyName : 'Company Name',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1B5E20),
-                  fontFamily: 'Trirong',
+                const SizedBox(height: 8),
+                Text(
+                  companyName.isNotEmpty ? companyName : 'Company Name',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -221,18 +232,24 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
     );
   }
 
-  Widget _buildPosts(List<InternshipPostDto> posts) {
-    if (posts.isEmpty) {
-      return _buildCard('Available Internship ads', 'No internship ads listed');
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Available Internship ads',
+  Widget _buildAboutSection(String bio) {
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 120),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: const Color(0xFF1B5E20),
+          width: 2,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          const Text(
+            'About/Bio',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -240,8 +257,62 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
               fontFamily: 'Trirong',
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            bio.isNotEmpty ? bio : 'No bio yet',
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF1B5E20),
+              fontFamily: 'Trirong',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvailableInternshipsSection(List<InternshipPostDto> posts) {
+    if (posts.isEmpty) {
+      return SizedBox(
+        width: double.infinity,
+        height: 150,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: const Color(0xFF1B5E20),
+              width: 2,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: const Center(
+            child: Text(
+              'No posts yet',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1B5E20),
+                fontFamily: 'Trirong',
+              ),
+            ),
+          ),
         ),
-        const SizedBox(height: 8),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Available Internship ads',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1B5E20),
+            fontFamily: 'Trirong',
+          ),
+        ),
+        const SizedBox(height: 12),
         ...posts.map(_buildPostCard).toList(),
       ],
     );

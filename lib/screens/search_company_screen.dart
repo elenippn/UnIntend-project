@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../app_services.dart';
+import '../models/company_candidate_dto.dart';
+import '../utils/api_error_message.dart';
+import 'view_profile_student_screen.dart';
 
 class SearchCompanyScreen extends StatefulWidget {
   const SearchCompanyScreen({super.key});
@@ -14,8 +17,8 @@ class _SearchCompanyScreenState extends State<SearchCompanyScreen> {
   bool _isSearching = false;
   Timer? _debounceTimer;
   
-  List<dynamic> _allCandidates = [];
-  List<dynamic> _filteredCandidates = [];
+  List<CompanyCandidateDto> _allCandidates = [];
+  List<CompanyCandidateDto> _filteredCandidates = [];
   String? _error;
 
   @override
@@ -31,6 +34,7 @@ class _SearchCompanyScreenState extends State<SearchCompanyScreen> {
 
     try {
       final candidates = await AppServices.feed.getCompanyFeed();
+      print('🔍 Search Company: Loaded ${candidates.length} candidates');
       if (!mounted) return;
       setState(() {
         _allCandidates = candidates;
@@ -38,13 +42,13 @@ class _SearchCompanyScreenState extends State<SearchCompanyScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = friendlyApiError(e);
       });
+      print('❌ Search Company Error: $_error');
     }
   }
 
   void _performSearch(String query) {
-    // Cancel previous timer
     _debounceTimer?.cancel();
     
     setState(() {
@@ -58,20 +62,50 @@ class _SearchCompanyScreenState extends State<SearchCompanyScreen> {
       return;
     }
 
-    // Start new timer - search after 500ms of inactivity
     _debounceTimer = Timer(const Duration(milliseconds: 500), () {
       final lowerQuery = query.toLowerCase();
+      print('\n🔎 SEARCHING for: "$query"');
+      print('   Total candidates to search: ${_allCandidates.length}');
+      
+      final results = _allCandidates.where((candidate) {
+        // Ψάχνουμε σε όλα τα σημαντικά fields
+        final name = candidate.name.toLowerCase();
+        final bio = (candidate.bio ?? '').toLowerCase();
+        final university = (candidate.university ?? '').toLowerCase();
+        final department = (candidate.department ?? '').toLowerCase();
+        final studies = (candidate.studies ?? '').toLowerCase();
+        final skills = (candidate.skills ?? '').toLowerCase();
+        final experience = (candidate.experience ?? '').toLowerCase();
+        
+        // Check if query matches any field
+        final matches = name.contains(lowerQuery) ||
+            bio.contains(lowerQuery) ||
+            university.contains(lowerQuery) ||
+            department.contains(lowerQuery) ||
+            studies.contains(lowerQuery) ||
+            skills.contains(lowerQuery) ||
+            experience.contains(lowerQuery);
+        
+        if (matches) {
+          print('   ✅ MATCH: "${candidate.name}"');
+          final matchedIn = <String>[];
+          if (name.contains(lowerQuery)) matchedIn.add('name');
+          if (bio.contains(lowerQuery)) matchedIn.add('bio');
+          if (university.contains(lowerQuery)) matchedIn.add('university');
+          if (department.contains(lowerQuery)) matchedIn.add('department');
+          if (studies.contains(lowerQuery)) matchedIn.add('studies');
+          if (skills.contains(lowerQuery)) matchedIn.add('skills');
+          if (experience.contains(lowerQuery)) matchedIn.add('experience');
+          print('      └─ Matched in: ${matchedIn.join(", ")}');
+        }
+        
+        return matches;
+      }).toList();
+      
+      print('   Results found: ${results.length}\n');
+      
       setState(() {
-        _filteredCandidates = _allCandidates.where((candidate) {
-          final firstName = (candidate['firstName'] ?? '').toString().toLowerCase();
-          final lastName = (candidate['lastName'] ?? '').toString().toLowerCase();
-          final name = (candidate['name'] ?? '').toString().toLowerCase();
-          final bio = (candidate['bio'] ?? '').toString().toLowerCase();
-          return firstName.contains(lowerQuery) ||
-              lastName.contains(lowerQuery) ||
-              name.contains(lowerQuery) ||
-              bio.contains(lowerQuery);
-        }).toList();
+        _filteredCandidates = results;
       });
     });
   }
@@ -174,84 +208,161 @@ class _SearchCompanyScreenState extends State<SearchCompanyScreen> {
     );
   }
 
-  Widget _buildSearchResultCard(dynamic result) {
-    final String name = result['name'] ?? result['firstName'] ?? 'Student';
-    final String? bio = result['bio'];
-    final String? university = result['university'];
+  Widget _buildSearchResultCard(CompanyCandidateDto result) {
+    final String name = result.name;
+    final String? bio = result.bio;
+    final String? university = result.university;
+    final String? department = result.department;
+    final String? studies = result.studies;
+    final String? skills = result.skills;
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: const Color(0xFF1B5E20),
-          width: 2,
+    return GestureDetector(
+      onTap: () {
+        // View student profile
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ViewProfileStudentScreen(
+              student: {
+                'studentUserId': result.studentUserId,
+                'id': result.studentUserId,
+                'name': name,
+              },
+            ),
+          ),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: const Color(0xFF1B5E20),
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(8),
         ),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: const Color(0xFF1B5E20),
-                width: 1.5,
-              ),
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.person,
-                size: 28,
-                color: Color(0xFF1B5E20),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1B5E20),
-                    fontFamily: 'Trirong',
-                  ),
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFF1B5E20),
+                  width: 1.5,
                 ),
-                if (university != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    university,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF1B5E20),
-                      fontFamily: 'Trirong',
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                if (bio != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    bio,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF1B5E20),
-                      fontFamily: 'Trirong',
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.person,
+                  size: 28,
+                  color: Color(0xFF1B5E20),
+                ),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1B5E20),
+                            fontFamily: 'Trirong',
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward,
+                        size: 16,
+                        color: Color(0xFF1B5E20),
+                      ),
+                    ],
+                  ),
+                  // University
+                  if (university != null && university.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      university,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  // Department
+                  if (department != null && department.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Department: $department',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                        fontStyle: FontStyle.italic,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  // Bio
+                  if (bio != null && bio.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      bio,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  // Skills
+                  if (skills != null && skills.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Skills: $skills',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  // Studies
+                  if (studies != null && studies.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Studies: $studies',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF1B5E20),
+                        fontFamily: 'Trirong',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

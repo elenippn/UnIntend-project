@@ -8,6 +8,7 @@ class InternshipPostDto {
   final String? location;
   final bool saved;
   final String? imageUrl;
+  final int? companyUserId;
 
   const InternshipPostDto({
     required this.id,
@@ -19,6 +20,7 @@ class InternshipPostDto {
     required this.location,
     required this.saved,
     required this.imageUrl,
+    this.companyUserId,
   });
 
   factory InternshipPostDto.fromJson(Map<String, dynamic> json) {
@@ -30,6 +32,9 @@ class InternshipPostDto {
         (json['companyProfileImageUrl'] as String?) ??
         (json['companyImageUrl'] as String?);
 
+    final rawCompanyUserId = json['companyUserId'] ?? json['userId'] ?? json['ownerId'] ?? json['companyId'];
+    final int? companyUserId = rawCompanyUserId is int ? rawCompanyUserId : int.tryParse(rawCompanyUserId?.toString() ?? '');
+
     return InternshipPostDto(
       id: id,
       companyName: json['companyName'] as String?,
@@ -40,6 +45,7 @@ class InternshipPostDto {
       location: json['location'] as String?,
       saved: (json['saved'] ?? false) == true,
       imageUrl: json['imageUrl'] as String?,
+      companyUserId: companyUserId,
     );
   }
 }

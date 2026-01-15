@@ -5,6 +5,7 @@ import '../utils/api_error_message.dart';
 import '../utils/api_url.dart';
 import '../utils/internship_departments.dart';
 import '../widgets/app_cached_image.dart';
+import 'view_profile_student_screen.dart';
 
 class HomeCompanyScreen extends StatefulWidget {
   const HomeCompanyScreen({super.key});
@@ -444,19 +445,47 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name.isNotEmpty ? name : 'Candidate',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1B5E20),
-                          fontFamily: 'Trirong',
+                  child: GestureDetector(
+                    onTap: () {
+                      // View student profile
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ViewProfileStudentScreen(
+                            student: {
+                              'studentUserId': studentUserId,
+                              'id': studentUserId,
+                              'name': name,
+                            },
+                          ),
                         ),
-                      ),
-                    ],
+                      );
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                name.isNotEmpty ? name : 'Candidate',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1B5E20),
+                                  fontFamily: 'Trirong',
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.arrow_forward,
+                              size: 14,
+                              color: Color(0xFF1B5E20),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
