@@ -119,7 +119,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("Ready to connect! Check your messages."),
+              content: Text("Internship liked! Check your messages."),
               duration: Duration(seconds: 2),
               backgroundColor: Color(0xFF4CAF50),
             ),

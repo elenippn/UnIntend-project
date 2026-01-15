@@ -120,6 +120,19 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
       // Spec: after company LIKE/PASS, refresh /applications so pending/accepted/
       // declined reflect immediately in Messages/Chat.
       AppServices.events.applicationsChanged();
+
+      // Show confirmation message for LIKE
+      if (decision.toUpperCase() == 'LIKE') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Candidate liked! Check your messages."),
+              duration: Duration(seconds: 2),
+              backgroundColor: Color(0xFF4CAF50),
+            ),
+          );
+        }
+      }
     } catch (e) {
       if (removed != null) {
         setState(() {
@@ -362,185 +375,208 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     );
     final bool isSaved = _savedCandidateIds.contains(studentUserId);
 
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onDoubleTap: () =>
-          _toggleSave(studentUserId, studentPostId: studentPostId),
-      child: Container(
+    return Dismissible(
+      key: Key('candidate_$studentUserId'),
+      direction:
+          DismissDirection.startToEnd, // Swipe right (από αριστερά προς δεξιά)
+      confirmDismiss: (direction) async {
+        // Swipe right = LIKE (ταυτίζεται με το done plugin)
+        await _decide(studentUserId, 'LIKE', studentPostId: studentPostId);
+        return true;
+      },
+      background: Container(
         decoration: BoxDecoration(
-          border: Border.all(
-            color: const Color(0xFF0D3B1A),
-            width: 2.5,
-          ),
+          color: const Color(0xFF4CAF50), // Πράσινο για LIKE
           borderRadius: BorderRadius.circular(12),
         ),
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF1B5E20),
-                      width: 1.5,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        child: const Icon(
+          Icons.favorite,
+          color: Colors.white,
+          size: 32,
+        ),
+      ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onDoubleTap: () =>
+            _toggleSave(studentUserId, studentPostId: studentPostId),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: const Color(0xFF0D3B1A),
+              width: 2.5,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF1B5E20),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: AppProfileAvatar(
+                      imageUrl: profileImageUrl,
+                      size: 32,
+                      fallbackIcon: Icons.person,
                     ),
                   ),
-                  child: AppProfileAvatar(
-                    imageUrl: profileImageUrl,
-                    size: 32,
-                    fallbackIcon: Icons.person,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name.isNotEmpty ? name : 'Candidate',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1B5E20),
+                            fontFamily: 'Trirong',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (studiesTitle.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    studiesTitle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1B5E20),
+                      fontFamily: 'Trirong',
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              if (bio.isNotEmpty)
+                Text(
+                  bio,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                )
+              else
+                const Text(
+                  'No bio provided',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
+              if (skills.isNotEmpty ||
+                  studies.isNotEmpty ||
+                  experience.isNotEmpty)
+                const SizedBox(height: 12),
+              if (skills.isNotEmpty) ...[
+                RichText(
+                  text: TextSpan(
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF1B5E20),
+                      fontFamily: 'Trirong',
+                    ),
                     children: [
-                      Text(
-                        name.isNotEmpty ? name : 'Candidate',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1B5E20),
-                          fontFamily: 'Trirong',
-                        ),
+                      const TextSpan(
+                        text: 'Skills: ',
+                        style: TextStyle(fontWeight: FontWeight.w700),
                       ),
+                      TextSpan(text: skills),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (studies.isNotEmpty) ...[
+                RichText(
+                  text: TextSpan(
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF1B5E20),
+                      fontFamily: 'Trirong',
+                    ),
+                    children: [
+                      const TextSpan(
+                        text: 'Studies: ',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      TextSpan(text: studies),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (experience.isNotEmpty) ...[
+                RichText(
+                  text: TextSpan(
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF1B5E20),
+                      fontFamily: 'Trirong',
+                    ),
+                    children: [
+                      const TextSpan(
+                        text: 'Experience: ',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      TextSpan(text: experience),
                     ],
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            if (studiesTitle.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  studiesTitle,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1B5E20),
-                    fontFamily: 'Trirong',
-                  ),
-                ),
-              ),
-            if (bio.isNotEmpty)
-              Text(
-                bio,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF1B5E20),
-                  fontFamily: 'Trirong',
-                ),
-              )
-            else
-              const Text(
-                'No bio provided',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF1B5E20),
-                  fontFamily: 'Trirong',
-                ),
-              ),
-            if (skills.isNotEmpty ||
-                studies.isNotEmpty ||
-                experience.isNotEmpty)
               const SizedBox(height: 12),
-            if (skills.isNotEmpty) ...[
-              RichText(
-                text: TextSpan(
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF1B5E20),
-                    fontFamily: 'Trirong',
-                  ),
-                  children: [
-                    const TextSpan(
-                      text: 'Skills: ',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    tooltip: 'Pass',
+                    icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
+                    onPressed: () => _decide(
+                      studentUserId,
+                      'PASS',
+                      studentPostId: studentPostId,
                     ),
-                    TextSpan(text: skills),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-            if (studies.isNotEmpty) ...[
-              RichText(
-                text: TextSpan(
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF1B5E20),
-                    fontFamily: 'Trirong',
                   ),
-                  children: [
-                    const TextSpan(
-                      text: 'Studies: ',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                  IconButton(
+                    tooltip: 'Like',
+                    icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
+                    onPressed: () => _decide(
+                      studentUserId,
+                      'LIKE',
+                      studentPostId: studentPostId,
                     ),
-                    TextSpan(text: studies),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-            if (experience.isNotEmpty) ...[
-              RichText(
-                text: TextSpan(
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF1B5E20),
-                    fontFamily: 'Trirong',
                   ),
-                  children: [
-                    const TextSpan(
-                      text: 'Experience: ',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                  IconButton(
+                    tooltip: 'Save',
+                    icon: Icon(
+                      isSaved ? Icons.favorite : Icons.favorite_outline,
+                      color: const Color(0xFF1B5E20),
                     ),
-                    TextSpan(text: experience),
-                  ],
-                ),
+                    onPressed: () => _toggleSave(studentUserId,
+                        studentPostId: studentPostId),
+                  ),
+                ],
               ),
             ],
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                IconButton(
-                  tooltip: 'Pass',
-                  icon: const Icon(Icons.close, color: Color(0xFF1B5E20)),
-                  onPressed: () => _decide(
-                    studentUserId,
-                    'PASS',
-                    studentPostId: studentPostId,
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Like',
-                  icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
-                  onPressed: () => _decide(
-                    studentUserId,
-                    'LIKE',
-                    studentPostId: studentPostId,
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Save',
-                  icon: Icon(
-                    isSaved ? Icons.favorite : Icons.favorite_outline,
-                    color: const Color(0xFF1B5E20),
-                  ),
-                  onPressed: () =>
-                      _toggleSave(studentUserId, studentPostId: studentPostId),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
