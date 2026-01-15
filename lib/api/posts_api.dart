@@ -11,11 +11,13 @@ class PostsApi {
     required String title,
     required String description,
     String? location,
+    String? department,
   }) async {
     final res = await client.post('/posts', data: {
       'title': title,
       'description': description,
       'location': location,
+      'department': department,
     });
     return InternshipPostDto.fromJson(
         Map<String, dynamic>.from(res.data as Map));

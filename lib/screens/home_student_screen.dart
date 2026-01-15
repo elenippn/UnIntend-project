@@ -14,7 +14,7 @@ class HomeStudentScreen extends StatefulWidget {
 }
 
 class _HomeStudentScreenState extends State<HomeStudentScreen> {
-  Set<String> _selectedDepartments = {};
+  Set<String> _selectedDepartments = {'All'};
   bool _showFilter = false;
 
   bool _isLoading = true;
@@ -42,9 +42,48 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     });
 
     try {
-      final data = await AppServices.feed.getStudentFeed();
+      // Get the selected department filter (if any)
+      String? departmentFilter;
+      if (_selectedDepartments.isNotEmpty && !_selectedDepartments.contains('All')) {
+        // If a specific department is selected, use the first one
+        departmentFilter = _selectedDepartments.first;
+      }
+
+      print('┌─────────────────────────────────────────────────┐');
+      print('│ 📱 HOME STUDENT SCREEN - FILTER DEBUG          │');
+      print('├─────────────────────────────────────────────────┤');
+      print('│ Selected Departments Set: $_selectedDepartments');
+      print('│ Contains "All"? ${_selectedDepartments.contains('All')}');
+      print('│ Is Empty? ${_selectedDepartments.isEmpty}');
+      print('│ First item: ${_selectedDepartments.isNotEmpty ? _selectedDepartments.first : 'N/A'}');
+      print('├─────────────────────────────────────────────────┤');
+      print('│ FINAL Department Filter: "$departmentFilter"');
+      print('│ Filter Type: ${departmentFilter.runtimeType}');
+      print('│ Filter Length: ${departmentFilter?.length ?? 'null'}');
+      print('└─────────────────────────────────────────────────┘');
+
+      final data = await AppServices.feed.getStudentFeed(department: departmentFilter);
+
+      print('✅ RESPONSE RECEIVED');
+      print('   Total posts: ${data.length}');
+      print('   Posts by department:');
+      final deptMap = <String, int>{};
+      for (var post in data) {
+        final dept = post.department ?? 'NO_DEPARTMENT';
+        deptMap[dept] = (deptMap[dept] ?? 0) + 1;
+      }
+      deptMap.forEach((dept, count) {
+        print('     - $dept: $count posts');
+      });
 
       if (!mounted) return;
+
+      print('\n📋 POSTS TO BE DISPLAYED:');
+      for (var i = 0; i < data.length; i++) {
+        print('   [$i] ${data[i].title}');
+        print('       └─ department: "${data[i].department}"');
+      }
+      print('');
 
       setState(() {
         _internships = data;
@@ -134,17 +173,8 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   }
 
   List<InternshipPostDto> get _filteredInternships {
-    // Αν δεν έχει επιλεγεί φίλτρο ή είναι "All", δείξε όλα
-    if (_selectedDepartments.isEmpty || _selectedDepartments.contains('All')) {
-      return _internships;
-    }
-
-    // Φιλτράρουμε μόνο αν το DTO έχει department (αλλιώς θα βγει κενό)
-    return _internships.where((internship) {
-      final dept = (internship.department ?? '').trim();
-      if (dept.isEmpty) return true; // fallback: μην κρύβεις posts αν δεν υπάρχει department
-      return _selectedDepartments.contains(dept);
-    }).toList();
+    // Το backend κάνει το φιλτράρισμα, οπότε απλώς δείχνουμε τα δεδομένα που λήφθησαν
+    return _internships;
   }
 
   @override
@@ -334,21 +364,35 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
           final isSelected = _selectedDepartments.contains(dept);
           return GestureDetector(
             onTap: () {
-              setState(() {
-                if (dept == 'All') {
-                  // "All" is selected alone
-                  _selectedDepartments.clear();
-                  _selectedDepartments.add('All');
+              print('\n🖱️  FILTER CLICKED!');
+              print('   Clicked department: "$dept"');
+              
+              // Αλλάζουμε την επιλογή
+              if (dept == 'All') {
+                _selectedDepartments.clear();
+                _selectedDepartments.add('All');
+                print('   Action: Selecting "All" - clearing all others');
+              } else {
+                _selectedDepartments.remove('All');
+                if (isSelected) {
+                  _selectedDepartments.remove(dept);
+                  print('   Action: Deselecting "$dept"');
                 } else {
-                  // Remove "All" if selecting a specific department
-                  _selectedDepartments.remove('All');
-                  if (isSelected) {
-                    _selectedDepartments.remove(dept);
-                  } else {
-                    _selectedDepartments.add(dept);
-                  }
+                  _selectedDepartments.add(dept);
+                  print('   Action: Selecting "$dept"');
                 }
+              }
+              
+              print('   Updated _selectedDepartments: $_selectedDepartments');
+              
+              // Κλείνουμε το filter dropdown
+              setState(() {
+                _showFilter = false;
               });
+              
+              print('   Calling _loadFeed()...');
+              // Φορτώνουμε τα δεδομένα με το νέο φίλτρο
+              _loadFeed();
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(

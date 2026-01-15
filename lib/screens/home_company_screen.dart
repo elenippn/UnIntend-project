@@ -14,7 +14,7 @@ class HomeCompanyScreen extends StatefulWidget {
 }
 
 class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
-  Set<String> _selectedDepartments = {};
+  Set<String> _selectedDepartments = {'All'};
   bool _showFilter = false;
 
   bool _isLoading = true;
@@ -32,15 +32,9 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
       candidate.studentPostId;
 
   List<CompanyCandidateDto> get _filteredCandidates {
-  if (_selectedDepartments.isEmpty || _selectedDepartments.contains('All')) {
+    // Το backend κάνει το φιλτράρισμα, οπότε απλώς δείχνουμε τα δεδομένα που λήφθησαν
     return _candidates;
   }
-
-  return _candidates.where((candidate) {
-    final department = (candidate.department ?? '').trim();
-    return _selectedDepartments.contains(department);
-  }).toList();
-}
 
 
   @override
@@ -56,7 +50,14 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     });
 
     try {
-      final data = await AppServices.feed.getCompanyFeed();
+      // Get the selected department filter (if any)
+      String? departmentFilter;
+      if (_selectedDepartments.isNotEmpty && !_selectedDepartments.contains('All')) {
+        // If a specific department is selected, use the first one
+        departmentFilter = _selectedDepartments.first;
+      }
+
+      final data = await AppServices.feed.getCompanyFeed(department: departmentFilter);
       if (!mounted) return;
       _savedCandidateIds
         ..clear()
@@ -268,21 +269,26 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
           final isSelected = _selectedDepartments.contains(dept);
           return GestureDetector(
             onTap: () {
-              setState(() {
-                if (dept == 'All') {
-                  // "All" is selected alone
-                  _selectedDepartments.clear();
-                  _selectedDepartments.add('All');
+              // Αλλάζουμε την επιλογή
+              if (dept == 'All') {
+                _selectedDepartments.clear();
+                _selectedDepartments.add('All');
+              } else {
+                _selectedDepartments.remove('All');
+                if (isSelected) {
+                  _selectedDepartments.remove(dept);
                 } else {
-                  // Remove "All" if selecting a specific department
-                  _selectedDepartments.remove('All');
-                  if (isSelected) {
-                    _selectedDepartments.remove(dept);
-                  } else {
-                    _selectedDepartments.add(dept);
-                  }
+                  _selectedDepartments.add(dept);
                 }
+              }
+              
+              // Κλείνουμε το filter dropdown
+              setState(() {
+                _showFilter = false;
               });
+              
+              // Φορτώνουμε τα δεδομένα με το νέο φίλτρο
+              _loadFeed();
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(

@@ -17,10 +17,20 @@ class ApiClient {
       storage.write(key: 'token', value: token);
   Future<void> clearToken() => storage.delete(key: 'token');
 
-  Future<Response<T>> get<T>(String path) async {
+  Future<Response<T>> get<T>(String path, {Map<String, dynamic>? queryParameters}) async {
     final token = await getToken();
+    final fullUrl = '${dio.options.baseUrl}$path';
+    print('═══════════════════════════════════════════');
+    print('🔵 API GET REQUEST');
+    print('Base URL: ${dio.options.baseUrl}');
+    print('Path: $path');
+    print('Full URL: $fullUrl');
+    print('Query Parameters: $queryParameters');
+    print('═══════════════════════════════════════════');
+    
     return dio.get<T>(
       path,
+      queryParameters: queryParameters,
       options: Options(
           headers: token != null ? {'Authorization': 'Bearer $token'} : null),
     );

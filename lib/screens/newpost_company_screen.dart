@@ -145,7 +145,9 @@ class _NewPostCompanyScreenState extends State<NewPostCompanyScreen> {
                               ),
                             ),
                             underline: const SizedBox(),
-                            items: internshipDepartments.map((String value) {
+                            items: internshipDepartments
+                                .where((dept) => dept != 'All')
+                                .map((String value) {
                               return DropdownMenuItem<String>(
                                 value: value,
                                 child: Padding(
@@ -410,12 +412,20 @@ class _NewPostCompanyScreenState extends State<NewPostCompanyScreen> {
       return;
     }
 
+    if (_selectedDepartment == null || _selectedDepartment!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Department is required')),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
     try {
       final created = await AppServices.posts.createCompanyPost(
         title: title,
         description: description,
         location: location,
+        department: _selectedDepartment,
       );
 
       final image = _selectedImage;
