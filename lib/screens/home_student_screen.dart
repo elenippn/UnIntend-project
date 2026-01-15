@@ -147,8 +147,6 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     }).toList();
   }
 
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(

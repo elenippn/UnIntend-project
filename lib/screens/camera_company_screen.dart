@@ -9,7 +9,6 @@ class CameraCompanyScreen extends StatefulWidget {
 
 class _CameraCompanyScreenState extends State<CameraCompanyScreen> {
   bool _isVideo = false;
-  bool _showPhotoOptions = false;
 
   @override
   Widget build(BuildContext context) {

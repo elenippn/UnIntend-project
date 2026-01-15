@@ -4,6 +4,7 @@ class InternshipPostDto {
   final String? profileImageUrl;
   final String title;
   final String description;
+  final String? department;
   final String? location;
   final bool saved;
   final String? imageUrl;
@@ -14,6 +15,7 @@ class InternshipPostDto {
     this.profileImageUrl,
     required this.title,
     required this.description,
+    this.department,
     required this.location,
     required this.saved,
     required this.imageUrl,
@@ -34,6 +36,7 @@ class InternshipPostDto {
       profileImageUrl: profileImageUrl,
       title: (json['title'] ?? '') as String,
       description: (json['description'] ?? '') as String,
+      department: (json['department'] as String?) ?? (json['dept'] as String?),
       location: json['location'] as String?,
       saved: (json['saved'] ?? false) == true,
       imageUrl: json['imageUrl'] as String?,

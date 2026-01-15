@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
 import '../utils/api_error_message.dart';
-import 'home_company_screen.dart';
 
 class SignUpCompanyScreen extends StatefulWidget {
   const SignUpCompanyScreen({super.key});

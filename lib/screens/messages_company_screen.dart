@@ -580,7 +580,7 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
       );
     }
 
-final selected = _selectedFilter ?? 'All';
+final selected = _selectedFilter;
 
 final filtered = selected == 'All'
     ? _applications

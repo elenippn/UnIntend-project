@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
-import 'messages_company_screen.dart';
-import 'newpost_company_screen.dart';
 import '../models/company_candidate_dto.dart';
 import '../utils/api_error_message.dart';
 import '../utils/api_url.dart';
