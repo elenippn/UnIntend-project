@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
+import '../models/auth_me_dto.dart';
 import '../models/internship_post_dto.dart';
 import '../utils/api_error_message.dart';
 import '../utils/api_url.dart';
@@ -16,6 +17,8 @@ class ViewProfileCompanyScreen extends StatefulWidget {
 }
 
 class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
+  AuthMeDto? _profile;
+
   List<InternshipPostDto> _posts = const [];
   bool _loadingPosts = false;
   String? _postsError;
@@ -23,7 +26,59 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
   @override
   void initState() {
     super.initState();
+    _loadProfile();
     _maybeLoadPosts();
+  }
+
+  Future<void> _loadProfile() async {
+    final int? companyUserId = _extractCompanyUserId(widget.company);
+    print('🔍 DEBUG: companyUserId = $companyUserId');
+    print('🔍 DEBUG: company map keys = ${widget.company.keys.toList()}');
+    print('🔍 DEBUG: company map values = ${widget.company}');
+    
+    if (companyUserId == null) {
+      print('❌ DEBUG: companyUserId is null, cannot load profile');
+      return;
+    }
+
+    try {
+      // Try to get the company profile using the new API method
+      print('🔄 DEBUG: Trying API endpoints...');
+      final profile = await AppServices.profiles.getCompanyProfile(companyUserId);
+      if (!mounted) return;
+      
+      if (profile != null) {
+        setState(() {
+          _profile = profile;
+        });
+        print('✅ DEBUG: Profile loaded successfully from API');
+        print('📋 DEBUG: profile.username = ${profile.username}, profile.companyName = ${profile.companyName}');
+        print('📋 DEBUG: profile.companyBio = ${profile.companyBio}');
+        print('📋 DEBUG: profile.bio = ${profile.bio}');
+        print('📋 DEBUG: profile.profileImageUrl = ${profile.profileImageUrl}');
+      } else {
+        print('⚠️ DEBUG: No profile found via API, trying getMe()...');
+        
+        // Fallback: Try to get the company profile if it's the current user
+        final me = await AppServices.auth.getMe();
+        print('👤 DEBUG: me.id = ${me.id}, me.username = ${me.username}');
+        print('👤 DEBUG: me.companyName = ${me.companyName}, me.companyBio = ${me.companyBio}');
+        print('👤 DEBUG: me.bio = ${me.bio}, me.profileImageUrl = ${me.profileImageUrl}');
+        
+        if (me.id == companyUserId) {
+          setState(() {
+            _profile = me;
+          });
+          print('✅ DEBUG: Profile loaded successfully from getMe()');
+        } else {
+          print('❌ DEBUG: Not the current user (${me.id} != $companyUserId)');
+        }
+      }
+    } catch (e) {
+      print('💥 DEBUG: Error loading profile: $e');
+      if (!mounted) return;
+      // If we can't load the profile, continue with the map data
+    }
   }
 
   Future<void> _maybeLoadPosts() async {
@@ -51,19 +106,46 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
   @override
   Widget build(BuildContext context) {
     final company = widget.company;
-    final String username = (company['username'] ?? '') as String;
+    final profile = _profile;
+    
+    print('DEBUG Build: profile = $profile');
+    print('DEBUG Build: company map = $company');
+
+    // Use profile data when available, fallback to company map data
+    final String username = (profile?.username.trim().isNotEmpty ?? false)
+        ? profile!.username
+        : (company['username'] ?? '') as String;
+
     final String companyName =
-        (company['companyName'] ?? company['name'] ?? '') as String;
-    final String bio =
-        (company['bio'] ?? company['companyBio'] ?? company['description'] ?? '') as String;
-    final dynamic rawProfileImageUrl =
+        (profile?.companyName?.trim().isNotEmpty ?? false)
+            ? profile!.companyName!
+            : (profile?.name?.trim().isNotEmpty ?? false)
+                ? profile!.name
+                : (company['companyName'] ?? company['name'] ?? '') as String;
+
+    final String bio = (profile?.companyBio?.trim().isNotEmpty ?? false)
+        ? profile!.companyBio!
+        : (profile?.bio?.trim().isNotEmpty ?? false)
+            ? profile!.bio!
+            : (company['bio'] ??
+                company['companyBio'] ??
+                company['description'] ??
+                '') as String;
+
+    final dynamic rawMapProfileImageUrl =
         company['profileImageUrl'] ?? company['companyProfileImageUrl'];
-    final String? profileImageUrl = rawProfileImageUrl is String
-        ? resolveApiUrl(rawProfileImageUrl, baseUrl: AppServices.baseUrl)
-        : null;
+    final String? mapProfileImageUrl =
+        rawMapProfileImageUrl is String ? rawMapProfileImageUrl : null;
+    final String? profileImageUrl = resolveApiUrl(
+      profile?.profileImageUrl ?? mapProfileImageUrl,
+      baseUrl: AppServices.baseUrl,
+    );
+
     final List<InternshipPostDto> posts = _posts;
     final String displayUsername =
         username.isNotEmpty ? '@$username' : '@username';
+    
+    print('DEBUG Build: Final values - username: $username, companyName: $companyName, bio: $bio, profileImageUrl: $profileImageUrl');
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -78,7 +160,8 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
                       bottom: 32, left: 16, right: 16, top: 24),
                   child: Column(
                     children: [
-                      _buildUserInfo(companyName, displayUsername, profileImageUrl),
+                      _buildUserInfo(
+                          companyName, displayUsername, profileImageUrl),
                       const SizedBox(height: 20),
                       _buildAboutSection(bio),
                       const SizedBox(height: 16),
@@ -136,7 +219,8 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
     );
   }
 
-  Widget _buildUserInfo(String companyName, String displayUsername, String? profileImageUrl) {
+  Widget _buildUserInfo(
+      String companyName, String displayUsername, String? profileImageUrl) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 0),
       child: Row(
