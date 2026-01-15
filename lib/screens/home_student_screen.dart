@@ -27,13 +27,48 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   // Local "saved" state (για να αλλάζει το icon άμεσα)
   final Set<int> _savedPostIds = {};
 
-  final List<String> departments = internshipDepartments;
+  // Unread messages count for notification badge
+  int _unreadMessagesCount = 0;
 
+  final List<String> departments = internshipDepartments;
 
   @override
   void initState() {
     super.initState();
     _loadFeed();
+    _loadUnreadCount();
+    AppServices.events.addListener(_onApplicationsChanged);
+  }
+
+  @override
+  void dispose() {
+    AppServices.events.removeListener(_onApplicationsChanged);
+    super.dispose();
+  }
+
+  void _onApplicationsChanged() {
+    _loadUnreadCount();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    try {
+      final apps = await AppServices.applications.listApplications();
+      int total = 0;
+      for (final app in apps) {
+        if (app is Map) {
+          final unread = app['unreadCount'] ?? 0;
+          total +=
+              (unread is int ? unread : int.tryParse(unread.toString()) ?? 0);
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _unreadMessagesCount = total;
+        });
+      }
+    } catch (_) {
+      // Silent fail
+    }
   }
 
   Future<void> _loadFeed() async {
@@ -45,7 +80,8 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     try {
       // Get the selected department filter (if any)
       String? departmentFilter;
-      if (_selectedDepartments.isNotEmpty && !_selectedDepartments.contains('All')) {
+      if (_selectedDepartments.isNotEmpty &&
+          !_selectedDepartments.contains('All')) {
         // If a specific department is selected, use the first one
         departmentFilter = _selectedDepartments.first;
       }
@@ -56,14 +92,16 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
       print('│ Selected Departments Set: $_selectedDepartments');
       print('│ Contains "All"? ${_selectedDepartments.contains('All')}');
       print('│ Is Empty? ${_selectedDepartments.isEmpty}');
-      print('│ First item: ${_selectedDepartments.isNotEmpty ? _selectedDepartments.first : 'N/A'}');
+      print(
+          '│ First item: ${_selectedDepartments.isNotEmpty ? _selectedDepartments.first : 'N/A'}');
       print('├─────────────────────────────────────────────────┤');
       print('│ FINAL Department Filter: "$departmentFilter"');
       print('│ Filter Type: ${departmentFilter.runtimeType}');
       print('│ Filter Length: ${departmentFilter?.length ?? 'null'}');
       print('└─────────────────────────────────────────────────┘');
 
-      final data = await AppServices.feed.getStudentFeed(department: departmentFilter);
+      final data =
+          await AppServices.feed.getStudentFeed(department: departmentFilter);
 
       print('✅ RESPONSE RECEIVED');
       print('   Total posts: ${data.length}');
@@ -378,30 +416,18 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
             onTap: () {
               print('\n🖱️  FILTER CLICKED!');
               print('   Clicked department: "$dept"');
-              
-              // Αλλάζουμε την επιλογή
-              if (dept == 'All') {
-                _selectedDepartments.clear();
-                _selectedDepartments.add('All');
-                print('   Action: Selecting "All" - clearing all others');
-              } else {
-                _selectedDepartments.remove('All');
-                if (isSelected) {
-                  _selectedDepartments.remove(dept);
-                  print('   Action: Deselecting "$dept"');
-                } else {
-                  _selectedDepartments.add(dept);
-                  print('   Action: Selecting "$dept"');
-                }
-              }
-              
+
+              // Single selection: Αλλάζουμε απευθείας την επιλογή
+              _selectedDepartments.clear();
+              _selectedDepartments.add(dept);
+              print('   Action: Selected only "$dept"');
               print('   Updated _selectedDepartments: $_selectedDepartments');
-              
+
               // Κλείνουμε το filter dropdown
               setState(() {
                 _showFilter = false;
               });
-              
+
               print('   Calling _loadFeed()...');
               // Φορτώνουμε τα δεδομένα με το νέο φίλτρο
               _loadFeed();
@@ -414,7 +440,9 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
               child: Row(
                 children: [
                   Icon(
-                    isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                    isSelected
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
                     color: Colors.white,
                     size: 18,
                   ),
@@ -425,7 +453,8 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.white,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
                         fontFamily: 'Trirong',
                       ),
                     ),
@@ -524,44 +553,17 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
                       fontFamily: 'Trirong',
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      // View company profile
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ViewProfileCompanyScreen(
-                            company: {
-                              'companyName': companyName,
-                              'userId': internship.companyUserId,
-                            },
-                          ),
-                        ),
-                      );
-                    },
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            companyName,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1B5E20),
-                              fontFamily: 'Trirong',
-                            ),
-                          ),
-                        ),
-                        const Icon(
-                          Icons.arrow_forward,
-                          size: 14,
-                          color: Color(0xFF1B5E20),
-                        ),
-                      ],
-                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppCachedImage(
+                    imageUrl: imageUrl,
+                    width: 60,
+                    height: 60,
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -686,7 +688,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
           }),
           _buildNavIcon(Icons.mail_outline, () {
             Navigator.pushNamed(context, '/messages_student');
-          }),
+          }, badgeCount: _unreadMessagesCount),
           _buildNavIcon(Icons.person_outline, () {
             Navigator.pushNamed(context, '/profile_student');
           }),
@@ -695,13 +697,31 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     );
   }
 
-  Widget _buildNavIcon(IconData icon, VoidCallback onTap) {
+  Widget _buildNavIcon(IconData icon, VoidCallback onTap, {int? badgeCount}) {
     return GestureDetector(
       onTap: onTap,
-      child: Icon(
-        icon,
-        color: const Color(0xFF1B5E20),
-        size: 24,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(
+            icon,
+            color: const Color(0xFF1B5E20),
+            size: 24,
+          ),
+          if (badgeCount != null && badgeCount > 0)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1B5E20), // κυπαρισσί
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

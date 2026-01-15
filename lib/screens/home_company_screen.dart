@@ -23,8 +23,10 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
   List<CompanyCandidateDto> _candidates = [];
   final Set<int> _savedCandidateIds = {};
 
-  final List<String> departments = internshipDepartments;
+  // Unread messages count for notification badge
+  int _unreadMessagesCount = 0;
 
+  final List<String> departments = internshipDepartments;
 
   int _extractStudentId(CompanyCandidateDto candidate) =>
       candidate.studentUserId;
@@ -37,11 +39,43 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     return _candidates;
   }
 
-
   @override
   void initState() {
     super.initState();
     _loadFeed();
+    _loadUnreadCount();
+    AppServices.events.addListener(_onApplicationsChanged);
+  }
+
+  @override
+  void dispose() {
+    AppServices.events.removeListener(_onApplicationsChanged);
+    super.dispose();
+  }
+
+  void _onApplicationsChanged() {
+    _loadUnreadCount();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    try {
+      final apps = await AppServices.applications.listApplications();
+      int total = 0;
+      for (final app in apps) {
+        if (app is Map) {
+          final unread = app['unreadCount'] ?? 0;
+          total +=
+              (unread is int ? unread : int.tryParse(unread.toString()) ?? 0);
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _unreadMessagesCount = total;
+        });
+      }
+    } catch (_) {
+      // Silent fail
+    }
   }
 
   Future<void> _loadFeed() async {
@@ -53,12 +87,14 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     try {
       // Get the selected department filter (if any)
       String? departmentFilter;
-      if (_selectedDepartments.isNotEmpty && !_selectedDepartments.contains('All')) {
+      if (_selectedDepartments.isNotEmpty &&
+          !_selectedDepartments.contains('All')) {
         // If a specific department is selected, use the first one
         departmentFilter = _selectedDepartments.first;
       }
 
-      final data = await AppServices.feed.getCompanyFeed(department: departmentFilter);
+      final data =
+          await AppServices.feed.getCompanyFeed(department: departmentFilter);
       if (!mounted) return;
       _savedCandidateIds
         ..clear()
@@ -283,24 +319,15 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
           final isSelected = _selectedDepartments.contains(dept);
           return GestureDetector(
             onTap: () {
-              // Αλλάζουμε την επιλογή
-              if (dept == 'All') {
-                _selectedDepartments.clear();
-                _selectedDepartments.add('All');
-              } else {
-                _selectedDepartments.remove('All');
-                if (isSelected) {
-                  _selectedDepartments.remove(dept);
-                } else {
-                  _selectedDepartments.add(dept);
-                }
-              }
-              
+              // Single selection: Αλλάζουμε απευθείας την επιλογή
+              _selectedDepartments.clear();
+              _selectedDepartments.add(dept);
+
               // Κλείνουμε το filter dropdown
               setState(() {
                 _showFilter = false;
               });
-              
+
               // Φορτώνουμε τα δεδομένα με το νέο φίλτρο
               _loadFeed();
             },
@@ -312,7 +339,9 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
               child: Row(
                 children: [
                   Icon(
-                    isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                    isSelected
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
                     color: Colors.white,
                     size: 18,
                   ),
@@ -323,7 +352,8 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.white,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
                         fontFamily: 'Trirong',
                       ),
                     ),
@@ -478,70 +508,22 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
                       fallbackIcon: Icons.person,
                     ),
                   ),
-                  child: AppProfileAvatar(
-                    imageUrl: profileImageUrl,
-                    size: 32,
-                    fallbackIcon: Icons.person,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      // View student profile
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ViewProfileStudentScreen(
-                            student: {
-                              'studentUserId': studentUserId,
-                              'id': studentUserId,
-                              'name': name,
-                            },
-                          ),
-                        ),
-                      );
-                    },
+                  const SizedBox(width: 8),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                name.isNotEmpty ? name : 'Candidate',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1B5E20),
-                                  fontFamily: 'Trirong',
-                                ),
-                              ),
-                            ),
-                            const Icon(
-                              Icons.arrow_forward,
-                              size: 14,
-                              color: Color(0xFF1B5E20),
-                            ),
-                          ],
+                        Text(
+                          name.isNotEmpty ? name : 'Candidate',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1B5E20),
+                            fontFamily: 'Trirong',
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (studiesTitle.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  studiesTitle,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1B5E20),
-                    fontFamily: 'Trirong',
                   ),
                 ],
               ),
@@ -703,7 +685,7 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
           }),
           _buildNavIcon(Icons.mail_outline, () {
             Navigator.pushNamed(context, '/messages_company');
-          }),
+          }, badgeCount: _unreadMessagesCount),
           _buildNavIcon(Icons.person_outline, () {
             Navigator.pushNamed(context, '/profile_company');
           }),
@@ -712,13 +694,31 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     );
   }
 
-  Widget _buildNavIcon(IconData icon, VoidCallback onTap) {
+  Widget _buildNavIcon(IconData icon, VoidCallback onTap, {int? badgeCount}) {
     return GestureDetector(
       onTap: onTap,
-      child: Icon(
-        icon,
-        color: const Color(0xFF1B5E20),
-        size: 24,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(
+            icon,
+            color: const Color(0xFF1B5E20),
+            size: 24,
+          ),
+          if (badgeCount != null && badgeCount > 0)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1B5E20), // κυπαρισσί
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
