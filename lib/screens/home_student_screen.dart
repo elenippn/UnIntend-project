@@ -5,6 +5,7 @@ import '../utils/api_error_message.dart';
 import '../utils/api_url.dart';
 import '../utils/internship_departments.dart';
 import '../widgets/app_cached_image.dart';
+import 'view_profile_company_screen.dart';
 
 class HomeStudentScreen extends StatefulWidget {
   const HomeStudentScreen({super.key});
@@ -14,7 +15,7 @@ class HomeStudentScreen extends StatefulWidget {
 }
 
 class _HomeStudentScreenState extends State<HomeStudentScreen> {
-  String? _selectedDepartment;
+  Set<String> _selectedDepartments = {'All'};
   bool _showFilter = false;
 
   bool _isLoading = true;
@@ -27,6 +28,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   final Set<int> _savedPostIds = {};
 
   final List<String> departments = internshipDepartments;
+
 
   @override
   void initState() {
@@ -41,9 +43,48 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
     });
 
     try {
-      final data = await AppServices.feed.getStudentFeed();
+      // Get the selected department filter (if any)
+      String? departmentFilter;
+      if (_selectedDepartments.isNotEmpty && !_selectedDepartments.contains('All')) {
+        // If a specific department is selected, use the first one
+        departmentFilter = _selectedDepartments.first;
+      }
+
+      print('┌─────────────────────────────────────────────────┐');
+      print('│ 📱 HOME STUDENT SCREEN - FILTER DEBUG          │');
+      print('├─────────────────────────────────────────────────┤');
+      print('│ Selected Departments Set: $_selectedDepartments');
+      print('│ Contains "All"? ${_selectedDepartments.contains('All')}');
+      print('│ Is Empty? ${_selectedDepartments.isEmpty}');
+      print('│ First item: ${_selectedDepartments.isNotEmpty ? _selectedDepartments.first : 'N/A'}');
+      print('├─────────────────────────────────────────────────┤');
+      print('│ FINAL Department Filter: "$departmentFilter"');
+      print('│ Filter Type: ${departmentFilter.runtimeType}');
+      print('│ Filter Length: ${departmentFilter?.length ?? 'null'}');
+      print('└─────────────────────────────────────────────────┘');
+
+      final data = await AppServices.feed.getStudentFeed(department: departmentFilter);
+
+      print('✅ RESPONSE RECEIVED');
+      print('   Total posts: ${data.length}');
+      print('   Posts by department:');
+      final deptMap = <String, int>{};
+      for (var post in data) {
+        final dept = post.department ?? 'NO_DEPARTMENT';
+        deptMap[dept] = (deptMap[dept] ?? 0) + 1;
+      }
+      deptMap.forEach((dept, count) {
+        print('     - $dept: $count posts');
+      });
 
       if (!mounted) return;
+
+      print('\n📋 POSTS TO BE DISPLAYED:');
+      for (var i = 0; i < data.length; i++) {
+        print('   [$i] ${data[i].title}');
+        print('       └─ department: "${data[i].department}"');
+      }
+      print('');
 
       setState(() {
         _internships = data;
@@ -144,10 +185,7 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
   }
 
   List<InternshipPostDto> get _filteredInternships {
-    // ΠΡΟΣΟΧΗ: το backend feed δεν έχει department από default στο seed.
-    // Οπότε εδώ κρατάμε το filter UI, αλλά δεν φιλτράρουμε πραγματικά
-    // μέχρι να προσθέσουμε πεδίο department/tag στο backend.
-    // Αν θες, μπορώ να σου δείξω πώς να το προσθέσουμε σωστά.
+    // Το backend κάνει το φιλτράρισμα, οπότε απλώς δείχνουμε τα δεδομένα που λήφθησαν
     return _internships;
   }
 
@@ -330,28 +368,69 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
       ),
       child: ListView.builder(
         shrinkWrap: true,
+        padding: EdgeInsets.zero,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: departments.length,
         itemBuilder: (context, index) {
+          final dept = departments[index];
+          final isSelected = _selectedDepartments.contains(dept);
           return GestureDetector(
             onTap: () {
+              print('\n🖱️  FILTER CLICKED!');
+              print('   Clicked department: "$dept"');
+              
+              // Αλλάζουμε την επιλογή
+              if (dept == 'All') {
+                _selectedDepartments.clear();
+                _selectedDepartments.add('All');
+                print('   Action: Selecting "All" - clearing all others');
+              } else {
+                _selectedDepartments.remove('All');
+                if (isSelected) {
+                  _selectedDepartments.remove(dept);
+                  print('   Action: Deselecting "$dept"');
+                } else {
+                  _selectedDepartments.add(dept);
+                  print('   Action: Selecting "$dept"');
+                }
+              }
+              
+              print('   Updated _selectedDepartments: $_selectedDepartments');
+              
+              // Κλείνουμε το filter dropdown
               setState(() {
-                _selectedDepartment = departments[index];
                 _showFilter = false;
               });
+              
+              print('   Calling _loadFeed()...');
+              // Φορτώνουμε τα δεδομένα με το νέο φίλτρο
+              _loadFeed();
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 10,
               ),
-              child: Text(
-                departments[index],
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.white,
-                  fontFamily: 'Trirong',
-                ),
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      dept,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -445,17 +524,44 @@ class _HomeStudentScreenState extends State<HomeStudentScreen> {
                       fontFamily: 'Trirong',
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AppCachedImage(
-                    imageUrl: imageUrl,
-                    width: 60,
-                    height: 60,
-                    borderRadius: BorderRadius.circular(4),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      // View company profile
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ViewProfileCompanyScreen(
+                            company: {
+                              'companyName': companyName,
+                              'userId': internship.companyUserId,
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            companyName,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1B5E20),
+                              fontFamily: 'Trirong',
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward,
+                          size: 14,
+                          color: Color(0xFF1B5E20),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(

@@ -6,8 +6,25 @@ class FeedApi {
   final ApiClient client;
   FeedApi(this.client);
 
-  Future<List<InternshipPostDto>> getStudentFeed() async {
-    final res = await client.get('/feed/student');
+  Future<List<InternshipPostDto>> getStudentFeed({String? department}) async {
+    print('\n🔍 FEED API - getStudentFeed()');
+    print('   Input department param: "$department"');
+    print('   Param type: ${department.runtimeType}');
+    print('   Is null: ${department == null}');
+    print('   Is empty: ${department?.isEmpty}');
+    
+    final params = <String, dynamic>{};
+    if (department != null && department.isNotEmpty && department != 'All') {
+      params['department'] = department;
+      print('   ✅ Adding to query params: department=$department');
+    } else {
+      print('   ❌ NOT adding to query params (null, empty, or "All")');
+    }
+    
+    print('   Final query params map: $params');
+    print('   Will pass to dio.get: ${params.isNotEmpty ? params : 'null'}\n');
+    
+    final res = await client.get('/feed/student', queryParameters: params.isNotEmpty ? params : null);
     final list = (res.data as List).cast<dynamic>();
     return list
         .map((e) =>
@@ -29,8 +46,15 @@ class FeedApi {
     });
   }
 
-  Future<List<CompanyCandidateDto>> getCompanyFeed() async {
-    final res = await client.get('/feed/company');
+  Future<List<CompanyCandidateDto>> getCompanyFeed({String? department}) async {
+    final params = <String, dynamic>{};
+    if (department != null && department.isNotEmpty && department != 'All') {
+      params['department'] = department;
+    }
+    
+    print('DEBUG: FeedApi.getCompanyFeed() called with params: $params');
+    
+    final res = await client.get('/feed/company', queryParameters: params.isNotEmpty ? params : null);
     final list = (res.data as List).cast<dynamic>();
     return list
         .map((e) =>

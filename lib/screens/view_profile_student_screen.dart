@@ -18,8 +18,6 @@ class ViewProfileStudentScreen extends StatefulWidget {
 
 class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
   StudentProfileDto? _profile;
-  bool _loadingProfile = false;
-  String? _profileError;
 
   List<ProfilePostDto> _posts = const [];
   bool _loadingPosts = false;
@@ -35,10 +33,6 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
   Future<void> _loadProfile() async {
     final int? studentUserId = _extractStudentUserId(widget.student);
     if (studentUserId == null) return;
-    setState(() {
-      _loadingProfile = true;
-      _profileError = null;
-    });
 
     try {
       final profile =
@@ -46,14 +40,9 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
       if (!mounted) return;
       setState(() {
         _profile = profile;
-        _loadingProfile = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _profileError = friendlyApiError(e);
-        _loadingProfile = false;
-      });
     }
   }
 
@@ -141,6 +130,8 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
             university,
             department,
           ], separator: '\n');
+    final String displayUsername =
+        username.isNotEmpty ? '@$username' : '@username';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -157,55 +148,27 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
                     children: [
                       _buildUserInfo(
                         displayName,
-                        username,
+                        displayUsername,
                         profileImageUrl: profileImageUrl,
                       ),
-                      if (_loadingProfile && _profile == null)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 12),
-                          child: CircularProgressIndicator(),
-                        )
-                      else if (_profileError != null && _profile == null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: _buildCard(
-                            'Profile',
-                            'Could not load profile: $_profileError',
-                          ),
-                        ),
-                      const SizedBox(height: 20),
-                      _buildCard('About/Bio',
-                          bio.isNotEmpty ? bio : 'No bio provided'),
-                      const SizedBox(height: 12),
-                      _buildCard(
-                        'Studies',
-                        studiesText.isNotEmpty
-                            ? studiesText
-                            : 'No studies info',
-                      ),
-                      const SizedBox(height: 12),
-                      _buildCard(
-                        'Skills',
-                        skills.isNotEmpty ? skills : 'No skills provided',
-                      ),
-                      const SizedBox(height: 12),
-                      _buildCard(
-                        'Experience',
-                        experience.isNotEmpty
-                            ? experience
-                            : 'No experience provided',
-                      ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 24),
+                      _buildAboutSection(bio),
+                      const SizedBox(height: 16),
+                      _buildStudiesSection(studiesText),
+                      const SizedBox(height: 16),
+                      _buildSkillsSection(skills),
+                      const SizedBox(height: 16),
+                      _buildExperienceSection(experience),
+                      const SizedBox(height: 16),
                       if (_loadingPosts)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 8),
                           child: CircularProgressIndicator(),
                         )
                       else if (_postsError != null)
-                        _buildCard(
-                            'Posts', 'Could not load posts: $_postsError')
+                        _buildCard('Posts', 'Could not load posts: $_postsError')
                       else
-                        _buildPosts(posts),
+                        _buildPostsSection(posts),
                     ],
                   ),
                 ),
@@ -327,63 +290,71 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
     String username, {
     required String? profileImageUrl,
   }) {
-    final String displayUsername =
-        username.isNotEmpty ? '@$username' : '@username';
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: const Color(0xFF1B5E20),
-              width: 2,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: const Color(0xFF1B5E20),
+                width: 2,
+              ),
+            ),
+            child: profileImageUrl != null
+                ? AppProfileAvatar(
+                    imageUrl: profileImageUrl,
+                    size: 76,
+                    fallbackIcon: Icons.person,
+                  )
+                : const Center(
+                    child: Icon(
+                      Icons.person,
+                      size: 40,
+                      color: Color(0xFF1B5E20),
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Text(
+                  username,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  name.isNotEmpty ? name : 'Student',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
+                  ),
+                ),
+              ],
             ),
           ),
-          child: Center(
-            child: AppProfileAvatar(
-              imageUrl: profileImageUrl,
-              size: 76,
-              fallbackIcon: Icons.person,
-            ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 4),
-              Text(
-                displayUsername,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF1B5E20),
-                  fontFamily: 'Trirong',
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                name.isNotEmpty ? name : 'Student',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1B5E20),
-                  fontFamily: 'Trirong',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildCard(String title, String body) {
     return Container(
       width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 80),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         border: Border.all(color: const Color(0xFF1B5E20), width: 1.5),
@@ -405,13 +376,55 @@ class _ViewProfileStudentScreenState extends State<ViewProfileStudentScreen> {
           Text(
             body.isNotEmpty ? body : 'Not provided',
             style: const TextStyle(
-              fontSize: 14,
-              color: Colors.black87,
+              fontSize: 13,
+              color: Color(0xFF1B5E20),
               fontFamily: 'Trirong',
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAboutSection(String bio) {
+    return _buildCard('About/Bio', bio.isNotEmpty ? bio : 'No bio provided');
+  }
+
+  Widget _buildStudiesSection(String studies) {
+    return _buildCard('Studies', studies.isNotEmpty ? studies : 'No studies info');
+  }
+
+  Widget _buildSkillsSection(String skills) {
+    return _buildCard('Skills', skills.isNotEmpty ? skills : 'No skills provided');
+  }
+
+  Widget _buildExperienceSection(String experience) {
+    return _buildCard('Experience', experience.isNotEmpty ? experience : 'No experience provided');
+  }
+
+  Widget _buildPostsSection(List<ProfilePostDto> posts) {
+    if (posts.isEmpty) {
+      return _buildCard('Posts', 'No posts available');
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Posts',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1B5E20),
+              fontFamily: 'Trirong',
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...posts.map(_buildPostCard).toList(),
+      ],
     );
   }
 

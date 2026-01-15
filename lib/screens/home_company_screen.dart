@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import '../app_services.dart';
-import 'messages_company_screen.dart';
-import 'newpost_company_screen.dart';
 import '../models/company_candidate_dto.dart';
 import '../utils/api_error_message.dart';
 import '../utils/api_url.dart';
 import '../utils/internship_departments.dart';
 import '../widgets/app_cached_image.dart';
+import 'view_profile_student_screen.dart';
 
 class HomeCompanyScreen extends StatefulWidget {
   const HomeCompanyScreen({super.key});
@@ -16,7 +15,7 @@ class HomeCompanyScreen extends StatefulWidget {
 }
 
 class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
-  String? _selectedDepartment;
+  Set<String> _selectedDepartments = {'All'};
   bool _showFilter = false;
 
   bool _isLoading = true;
@@ -26,11 +25,18 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
 
   final List<String> departments = internshipDepartments;
 
+
   int _extractStudentId(CompanyCandidateDto candidate) =>
       candidate.studentUserId;
 
   int? _extractStudentPostId(CompanyCandidateDto candidate) =>
       candidate.studentPostId;
+
+  List<CompanyCandidateDto> get _filteredCandidates {
+    // Το backend κάνει το φιλτράρισμα, οπότε απλώς δείχνουμε τα δεδομένα που λήφθησαν
+    return _candidates;
+  }
+
 
   @override
   void initState() {
@@ -45,7 +51,14 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     });
 
     try {
-      final data = await AppServices.feed.getCompanyFeed();
+      // Get the selected department filter (if any)
+      String? departmentFilter;
+      if (_selectedDepartments.isNotEmpty && !_selectedDepartments.contains('All')) {
+        // If a specific department is selected, use the first one
+        departmentFilter = _selectedDepartments.first;
+      }
+
+      final data = await AppServices.feed.getCompanyFeed(department: departmentFilter);
       if (!mounted) return;
       _savedCandidateIds
         ..clear()
@@ -262,28 +275,60 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
       ),
       child: ListView.builder(
         shrinkWrap: true,
+        padding: EdgeInsets.zero,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: departments.length,
         itemBuilder: (context, index) {
+          final dept = departments[index];
+          final isSelected = _selectedDepartments.contains(dept);
           return GestureDetector(
             onTap: () {
+              // Αλλάζουμε την επιλογή
+              if (dept == 'All') {
+                _selectedDepartments.clear();
+                _selectedDepartments.add('All');
+              } else {
+                _selectedDepartments.remove('All');
+                if (isSelected) {
+                  _selectedDepartments.remove(dept);
+                } else {
+                  _selectedDepartments.add(dept);
+                }
+              }
+              
+              // Κλείνουμε το filter dropdown
               setState(() {
-                _selectedDepartment = departments[index];
                 _showFilter = false;
               });
+              
+              // Φορτώνουμε τα δεδομένα με το νέο φίλτρο
+              _loadFeed();
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 10,
               ),
-              child: Text(
-                departments[index],
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.white,
-                  fontFamily: 'Trirong',
-                ),
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      dept,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontFamily: 'Trirong',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -323,7 +368,9 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
       );
     }
 
-    if (_candidates.isEmpty) {
+    final items = _filteredCandidates;
+
+    if (items.isEmpty) {
       return const Padding(
         padding: EdgeInsets.only(top: 40),
         child: Center(
@@ -341,10 +388,10 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: _candidates.length,
+      itemCount: items.length,
       separatorBuilder: (context, index) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
-        return _buildCandidateCard(_candidates[index]);
+        return _buildCandidateCard(items[index]);
       },
     );
   }
@@ -431,22 +478,70 @@ class _HomeCompanyScreenState extends State<HomeCompanyScreen> {
                       fallbackIcon: Icons.person,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
+                  child: AppProfileAvatar(
+                    imageUrl: profileImageUrl,
+                    size: 32,
+                    fallbackIcon: Icons.person,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      // View student profile
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ViewProfileStudentScreen(
+                            student: {
+                              'studentUserId': studentUserId,
+                              'id': studentUserId,
+                              'name': name,
+                            },
+                          ),
+                        ),
+                      );
+                    },
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          name.isNotEmpty ? name : 'Candidate',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1B5E20),
-                            fontFamily: 'Trirong',
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                name.isNotEmpty ? name : 'Candidate',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1B5E20),
+                                  fontFamily: 'Trirong',
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.arrow_forward,
+                              size: 14,
+                              color: Color(0xFF1B5E20),
+                            ),
+                          ],
                         ),
                       ],
                     ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (studiesTitle.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  studiesTitle,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1B5E20),
+                    fontFamily: 'Trirong',
                   ),
                 ],
               ),
