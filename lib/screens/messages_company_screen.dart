@@ -16,7 +16,6 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
     with WidgetsBindingObserver {
   String _selectedFilter = 'All';
 
-
   bool _showFilter = false;
 
   bool _isLoading = true;
@@ -358,7 +357,8 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
             onTap: () {
               setState(() {
                 _selectedFilter = filter; // single selection
-                _showFilter = false;      // προαιρετικό: κλείνει το dropdown μετά την επιλογή
+                _showFilter =
+                    false; // προαιρετικό: κλείνει το dropdown μετά την επιλογή
               });
             },
             child: Padding(
@@ -366,7 +366,9 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
               child: Row(
                 children: [
                   Icon(
-                    isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                    isSelected
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
                     color: Colors.white,
                     size: 18,
                   ),
@@ -388,7 +390,6 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
             ),
           );
         },
-
       ),
     );
   }
@@ -442,13 +443,28 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
                   width: 1.5,
                 ),
               ),
-              child: const Center(
-                child: Icon(
-                  Icons.person,
-                  size: 20,
-                  color: Color(0xFF1B5E20),
-                ),
-              ),
+              child: message['studentProfileImageUrl'] != null
+                  ? ClipOval(
+                      child: Image.network(
+                        message['studentProfileImageUrl'],
+                        fit: BoxFit.cover,
+                        width: 38,
+                        height: 38,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(
+                          Icons.person,
+                          size: 20,
+                          color: Color(0xFF1B5E20),
+                        ),
+                      ),
+                    )
+                  : const Center(
+                      child: Icon(
+                        Icons.person,
+                        size: 20,
+                        color: Color(0xFF1B5E20),
+                      ),
+                    ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -511,7 +527,6 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
     );
   }
 
-  
   Widget _buildBottomNavBar() {
     return Container(
       decoration: BoxDecoration(
@@ -580,24 +595,25 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
       );
     }
 
-final selected = _selectedFilter;
+    final selected = _selectedFilter;
 
-final filtered = selected == 'All'
-    ? _applications
-    : _applications.where((a) {
-        if (a is! Map) return false;
-        final statusRaw = (a['status'] ?? '').toString();
-        final lastMessage = (a['lastMessage'] ?? '').toString();
-        final cidRaw = a['conversationId'];
-        final cid = cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
-        final derived = deriveApplicationStatus(
-          applicationStatusRaw: statusRaw,
-          lastMessage: lastMessage,
-          lastSystemMessage: cid == null ? null : _conversationLastSystemText[cid],
-        );
-        return derived == selected;
-      }).toList();
-
+    final filtered = selected == 'All'
+        ? _applications
+        : _applications.where((a) {
+            if (a is! Map) return false;
+            final statusRaw = (a['status'] ?? '').toString();
+            final lastMessage = (a['lastMessage'] ?? '').toString();
+            final cidRaw = a['conversationId'];
+            final cid =
+                cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
+            final derived = deriveApplicationStatus(
+              applicationStatusRaw: statusRaw,
+              lastMessage: lastMessage,
+              lastSystemMessage:
+                  cid == null ? null : _conversationLastSystemText[cid],
+            );
+            return derived == selected;
+          }).toList();
 
     if (filtered.isEmpty) {
       return const Center(

@@ -384,7 +384,9 @@ class _MessagesStudentScreenState extends State<MessagesStudentScreen>
               child: Row(
                 children: [
                   Icon(
-                    isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                    isSelected
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
                     color: Colors.white,
                     size: 18,
                   ),
@@ -395,7 +397,8 @@ class _MessagesStudentScreenState extends State<MessagesStudentScreen>
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.white,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
                         fontFamily: 'Trirong',
                       ),
                     ),
@@ -405,7 +408,6 @@ class _MessagesStudentScreenState extends State<MessagesStudentScreen>
             ),
           );
         },
-
       ),
     );
   }
@@ -460,13 +462,28 @@ class _MessagesStudentScreenState extends State<MessagesStudentScreen>
                   width: 1.5,
                 ),
               ),
-              child: const Center(
-                child: Icon(
-                  Icons.person,
-                  size: 20,
-                  color: Color(0xFF1B5E20),
-                ),
-              ),
+              child: message['companyProfileImageUrl'] != null
+                  ? ClipOval(
+                      child: Image.network(
+                        message['companyProfileImageUrl'],
+                        fit: BoxFit.cover,
+                        width: 38,
+                        height: 38,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(
+                          Icons.business,
+                          size: 20,
+                          color: Color(0xFF1B5E20),
+                        ),
+                      ),
+                    )
+                  : const Center(
+                      child: Icon(
+                        Icons.business,
+                        size: 20,
+                        color: Color(0xFF1B5E20),
+                      ),
+                    ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -601,24 +618,23 @@ class _MessagesStudentScreenState extends State<MessagesStudentScreen>
       );
     }
 
-final filtered = _selectedFilter == 'All'
-    ? _applications
-    : _applications.where((a) {
-        if (a is! Map) return false;
-        final statusRaw = (a['status'] ?? '').toString();
-        final lastMessage = (a['lastMessage'] ?? '').toString();
-        final cidRaw = a['conversationId'];
-        final cid =
-            cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
-        final derived = deriveApplicationStatus(
-          applicationStatusRaw: statusRaw,
-          lastMessage: lastMessage,
-          lastSystemMessage:
-              cid == null ? null : _conversationLastSystemText[cid],
-        );
-        return derived == _selectedFilter;
-      }).toList();
-
+    final filtered = _selectedFilter == 'All'
+        ? _applications
+        : _applications.where((a) {
+            if (a is! Map) return false;
+            final statusRaw = (a['status'] ?? '').toString();
+            final lastMessage = (a['lastMessage'] ?? '').toString();
+            final cidRaw = a['conversationId'];
+            final cid =
+                cidRaw is int ? cidRaw : int.tryParse(cidRaw?.toString() ?? '');
+            final derived = deriveApplicationStatus(
+              applicationStatusRaw: statusRaw,
+              lastMessage: lastMessage,
+              lastSystemMessage:
+                  cid == null ? null : _conversationLastSystemText[cid],
+            );
+            return derived == _selectedFilter;
+          }).toList();
 
     if (filtered.isEmpty) {
       return const Center(
