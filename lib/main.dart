@@ -52,12 +52,31 @@ class MyApp extends StatelessWidget {
         '/newpost_student': (context) => const NewPostStudentScreen(),
         '/search_student': (context) => const SearchStudentScreen(),
         '/messages_student': (context) => const MessagesStudentScreen(),
-        '/message_chat_student': (context) => const ChatScreen(
-              conversationId: 0,
-              title: '',
-              subtitle: '',
-              canSend: false,
+        '/message_chat_student': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          if (args is Map) {
+            final cidRaw = args['conversationId'];
+            final cid = cidRaw is int
+                ? cidRaw
+                : int.tryParse(cidRaw?.toString() ?? '') ?? 0;
+            return ChatScreen(
+              conversationId: cid,
+              title: (args['title'] ?? '').toString(),
+              contextLine: (args['contextLine'] ?? '').toString(),
+              subtitle: (args['subtitle'] ?? '').toString(),
+              canSend: (args['canSend'] == true),
+            );
+          }
+
+          return const Scaffold(
+            body: Center(
+              child: Text(
+                'Open a conversation from Messages.',
+                textAlign: TextAlign.center,
+              ),
             ),
+          );
+        },
         '/profile_student': (context) => const ProfileStudentScreen(),
         '/profile_edit_student': (context) => const ProfileEditStudentScreen(),
         '/add_file_student': (context) => const AddFileScreen(),
@@ -68,12 +87,31 @@ class MyApp extends StatelessWidget {
         '/search_company': (context) => const SearchCompanyScreen(),
         '/newpost_company': (context) => const NewPostCompanyScreen(),
         '/messages_company': (context) => const MessagesCompanyScreen(),
-        '/message_chat_company': (context) => const ChatCompanyScreen(
-              conversationId: 0,
-              title: '',
-              subtitle: '',
-              canSend: false,
+        '/message_chat_company': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          if (args is Map) {
+            final cidRaw = args['conversationId'];
+            final cid = cidRaw is int
+                ? cidRaw
+                : int.tryParse(cidRaw?.toString() ?? '') ?? 0;
+            return ChatCompanyScreen(
+              conversationId: cid,
+              title: (args['title'] ?? '').toString(),
+              contextLine: (args['contextLine'] ?? '').toString(),
+              subtitle: (args['subtitle'] ?? '').toString(),
+              canSend: (args['canSend'] == true),
+            );
+          }
+
+          return const Scaffold(
+            body: Center(
+              child: Text(
+                'Open a conversation from Messages.',
+                textAlign: TextAlign.center,
+              ),
             ),
+          );
+        },
         '/profile_company': (context) => const ProfileCompanyScreen(),
         '/profile_edit_company': (context) => const ProfileEditCompanyScreen(),
         '/add_file_company': (context) => const AddFileCompanyScreen(),

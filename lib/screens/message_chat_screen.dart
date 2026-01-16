@@ -32,6 +32,12 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _error;
   List<dynamic> _messages = [];
 
+  int? _myUserId;
+  String? _myRole;
+  String? _myDisplayName;
+  String? _myAvatarUrl;
+  Future<void>? _meFuture;
+
   late String _subtitle;
   late bool _canSend;
   Timer? _statusPollTimer;
@@ -46,6 +52,202 @@ class _ChatScreenState extends State<ChatScreen> {
     _markReadAndRefresh();
     _loadMessages();
     _startStatusPollingIfNeeded();
+  }
+
+  Future<void> _ensureMeLoaded() {
+    return _meFuture ??= () async {
+      try {
+        final me = await AppServices.auth.getMe();
+        _myUserId = me.id;
+        _myRole = me.role;
+        final role = (me.role ?? '').toUpperCase();
+        if (role == 'COMPANY' && (me.companyName ?? '').trim().isNotEmpty) {
+          _myDisplayName = me.companyName;
+        } else {
+          final full = '${me.name} ${me.surname}'.trim();
+          _myDisplayName = full.isNotEmpty ? full : me.username;
+        }
+        _myAvatarUrl = me.profileImageUrl;
+      } catch (_) {
+        // best effort
+      }
+    }();
+  }
+
+  int? _tryParseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  String? _normalizeRole(dynamic value) {
+    final v = value?.toString().trim();
+    if (v == null || v.isEmpty) return null;
+    return v.toUpperCase();
+  }
+
+  String? _extractSenderName(Map m) {
+    final sender = m['sender'];
+    if (sender is Map) {
+      final name = sender['name']?.toString().trim();
+      if (name != null && name.isNotEmpty) return name;
+    }
+
+    for (final key in const [
+      'senderName',
+      'sender_name',
+      'name',
+      'username',
+    ]) {
+      final v = m[key]?.toString().trim();
+      if (v != null && v.isNotEmpty) return v;
+    }
+    return null;
+  }
+
+  String? _extractSenderAvatarUrl(Map m) {
+    final sender = m['sender'];
+    if (sender is Map) {
+      final url = sender['avatarUrl']?.toString().trim();
+      if (url != null && url.isNotEmpty) return url;
+    }
+
+    for (final key in const [
+      'senderProfileImageUrl',
+      'sender_profile_image_url',
+      'profileImageUrl',
+      'profile_image_url',
+      'avatarUrl',
+      'avatar_url',
+    ]) {
+      final v = m[key]?.toString().trim();
+      if (v != null && v.isNotEmpty) return v;
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _normalizeMessage(Map m) {
+    final normalized = Map<String, dynamic>.from(m);
+
+    normalized['senderId'] = _tryParseInt(normalized['senderId']);
+
+    final rawType = normalized['type'];
+    String? type = rawType?.toString().trim().toUpperCase();
+
+    final legacyIsSystem = (normalized['isSystem'] == true) ||
+        (normalized['messageType']?.toString().toUpperCase() == 'SYSTEM');
+    if (type == null || type.isEmpty) {
+      type = legacyIsSystem ? 'SYSTEM' : 'USER';
+    }
+    if (normalized['senderId'] == null) {
+      type = 'SYSTEM';
+    }
+    normalized['type'] = type;
+
+    normalized['text'] = (normalized['text'] ?? normalized['message'] ?? '').toString();
+    normalized['createdAt'] = (normalized['createdAt'] ??
+            normalized['created_at'] ??
+            normalized['timestamp'] ??
+            normalized['time'])
+        ?.toString();
+
+    final sender = normalized['sender'];
+    if (sender is Map) {
+      final senderMap = Map<String, dynamic>.from(sender);
+      senderMap['id'] = _tryParseInt(senderMap['id'] ?? senderMap['userId']);
+      senderMap['role'] = _normalizeRole(senderMap['role'] ?? senderMap['type']);
+      senderMap['name'] = senderMap['name']?.toString();
+      senderMap['avatarUrl'] = senderMap['avatarUrl']?.toString();
+      normalized['sender'] = senderMap;
+    }
+
+    normalized['senderRole'] =
+        _normalizeRole(normalized['senderRole'] ?? normalized['sender_role']);
+
+    final isMine = normalized['isMine'];
+    if (isMine is bool) {
+      normalized['isMine'] = isMine;
+    } else {
+      normalized['isMine'] = null;
+    }
+
+    return normalized;
+  }
+
+  List<dynamic> _normalizeMessages(List<dynamic> raw) {
+    return raw
+        .whereType<Map>()
+        .map((m) => _normalizeMessage(m))
+      .toList(growable: true);
+  }
+
+  int? _extractSenderUserId(Map m) {
+    final direct = _tryParseInt(m['senderId']);
+    if (direct != null) return direct;
+
+    final sender = m['sender'];
+    if (sender is Map) {
+      final id = _tryParseInt(sender['id'] ?? sender['userId'] ?? sender['user_id']);
+      if (id != null) return id;
+    }
+
+    return null;
+  }
+
+  String? _extractSenderRole(Map m) {
+    for (final key in const [
+      'senderRole',
+      'sender_role',
+      'senderType',
+      'sender_type',
+      'role',
+      'fromRole',
+      'from_role',
+    ]) {
+      final role = _normalizeRole(m[key]);
+      if (role != null) return role;
+    }
+
+    for (final key in const [
+      'sender',
+      'fromUser',
+      'from',
+      'user',
+      'author',
+      'owner',
+    ]) {
+      final v = m[key];
+      if (v is Map) {
+        final role = _normalizeRole(v['role'] ?? v['type']);
+        if (role != null) return role;
+      }
+    }
+
+    return null;
+  }
+
+  bool _computeIsMe(Map m) {
+    final isMine = m['isMine'];
+    if (isMine is bool) return isMine;
+
+    final type = m['type']?.toString().toUpperCase();
+    if (type == 'SYSTEM' || m['senderId'] == null) return false;
+
+    final legacy = (m['isMine'] == true) || (m['fromMe'] == true) || (m['isMe'] == true);
+    if (legacy) return true;
+
+    final senderId = _extractSenderUserId(m);
+    if (senderId != null && _myUserId != null) {
+      return senderId == _myUserId;
+    }
+
+    final senderRole = _extractSenderRole(m);
+    final myRole = _normalizeRole(_myRole);
+    if (senderRole != null && myRole != null) {
+      return senderRole == myRole;
+    }
+
+    return false;
   }
 
   Future<void> _markReadAndRefresh() async {
@@ -119,14 +321,15 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final messages =
           await AppServices.chat.getMessages(widget.conversationId);
+      final normalized = _normalizeMessages(messages);
       String? lastSystemText;
-      for (var i = messages.length - 1; i >= 0; i--) {
-        final m = messages[i];
-        if (m is! Map) continue;
-        final bool isSystem = (m['isSystem'] == true) ||
-            (m['type']?.toString().toUpperCase() == 'SYSTEM');
+      for (var i = normalized.length - 1; i >= 0; i--) {
+        final m = normalized[i];
+        final bool isSystem =
+            (m['type']?.toString().toUpperCase() == 'SYSTEM') ||
+                (m['senderId'] == null);
         if (!isSystem) continue;
-        final txt = (m['text'] ?? m['message'] ?? '').toString();
+        final txt = (m['text'] ?? '').toString();
         if (txt.trim().isEmpty) continue;
         lastSystemText = txt;
         break;
@@ -143,7 +346,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (!_didRefreshAfterResolve) {
         _didRefreshAfterResolve = true;
-        _messages = messages;
+        _messages = normalized;
         _loadingMessages = false;
       }
 
@@ -160,10 +363,12 @@ class _ChatScreenState extends State<ChatScreen> {
       _error = null;
     });
     try {
+      await _ensureMeLoaded();
       final data = await AppServices.chat.getMessages(widget.conversationId);
+      final normalized = _normalizeMessages(data);
       if (!mounted) return;
       setState(() {
-        _messages = data;
+        _messages = normalized;
         _loadingMessages = false;
       });
 
@@ -286,6 +491,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputBar() {
+    final canActuallySend = _canSend && widget.conversationId != 0;
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -336,12 +542,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
           // send
           GestureDetector(
-            onTap: _canSend
+            onTap: canActuallySend
                 ? _send
                 : () {
+                    final msg = widget.conversationId == 0
+                        ? 'Conversation not available yet'
+                        : 'Conversation not accepted yet';
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Conversation not accepted yet')),
+                      SnackBar(
+                        content: Text(msg),
+                        behavior: SnackBarBehavior.floating,
+                        margin:
+                            const EdgeInsets.fromLTRB(16, 0, 16, 110 + 16),
+                      ),
                     );
                   },
             child: Container(
@@ -350,11 +563,14 @@ class _ChatScreenState extends State<ChatScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFF1B5E20), width: 2),
-                color: _canSend ? const Color(0xFFFAFD9F) : Colors.grey[300],
+                color:
+                    canActuallySend ? const Color(0xFFFAFD9F) : Colors.grey[300],
               ),
               child: Icon(
                 Icons.send,
-                color: _canSend ? const Color(0xFF1B5E20) : Colors.grey,
+                color: canActuallySend
+                    ? const Color(0xFF1B5E20)
+                    : Colors.grey,
                 size: 20,
               ),
             ),
@@ -474,17 +690,27 @@ class _ChatScreenState extends State<ChatScreen> {
       itemCount: _messages.length,
       itemBuilder: (context, index) {
         final m = _messages[index] as Map;
-        final String text = (m['text'] ?? m['message'] ?? '') as String;
-        final bool isSystem = (m['isSystem'] == true) ||
-            (m['type']?.toString().toUpperCase() == 'SYSTEM');
-        final bool isMe = (m['isMine'] == true) ||
-            (m['fromMe'] == true) ||
-            (m['isMe'] == true);
+        final String text = (m['text'] ?? '').toString();
+        final bool isSystem =
+          (m['type']?.toString().toUpperCase() == 'SYSTEM') ||
+            (m['senderId'] == null);
+        final bool isMe = _computeIsMe(m);
+
+        final String? senderName =
+            isMe ? (_myDisplayName ?? _extractSenderName(m)) : _extractSenderName(m);
+        final String? senderAvatarUrl = isMe
+            ? (_myAvatarUrl ?? _extractSenderAvatarUrl(m))
+            : _extractSenderAvatarUrl(m);
+        final String? senderRole =
+            isMe ? _myRole : (m['senderRole']?.toString());
 
         return _ChatBubble(
           text: text,
           isMe: isMe,
           isSystem: isSystem,
+          senderName: senderName,
+          senderAvatarUrl: senderAvatarUrl,
+          senderRole: senderRole,
         );
       },
     );
@@ -492,22 +718,36 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _send() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || !_canSend) return;
+    if (text.isEmpty || !_canSend || widget.conversationId == 0) return;
+
+    await _ensureMeLoaded();
 
     setState(() {
       _messages.add({
         'text': text,
         'isMe': true,
+        'type': 'USER',
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+        'senderId': _myUserId,
+        'senderRole': _myRole,
+        'isMine': true,
       });
     });
     _controller.clear();
 
     try {
       await AppServices.chat.sendMessage(widget.conversationId, text);
+      if (mounted) {
+        await _loadMessages();
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send: $e')),
+        SnackBar(
+          content: Text('Failed to send: $e'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 110 + 16),
+        ),
       );
     }
   }
@@ -517,12 +757,54 @@ class _ChatBubble extends StatelessWidget {
   final String text;
   final bool isMe;
   final bool isSystem;
+  final String? senderName;
+  final String? senderAvatarUrl;
+  final String? senderRole;
 
   const _ChatBubble({
     required this.text,
     required this.isMe,
     this.isSystem = false,
+    this.senderName,
+    this.senderAvatarUrl,
+    this.senderRole,
   });
+
+  Widget _buildAvatar() {
+    final url = senderAvatarUrl?.trim();
+    final hasUrl = url != null && url.isNotEmpty;
+    final role = senderRole?.toString().trim().toUpperCase();
+    final fallbackIcon = role == 'COMPANY' ? Icons.business : Icons.person;
+
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFFC9D3C9),
+        border: Border.all(color: const Color(0xFF1B5E20), width: 1),
+      ),
+      child: ClipOval(
+        child: hasUrl
+            ? Image.network(
+                url,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    fallbackIcon,
+                    size: 16,
+                    color: const Color(0xFF1B5E20),
+                  );
+                },
+              )
+            : Icon(
+                fallbackIcon,
+                size: 16,
+                color: const Color(0xFF1B5E20),
+              ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -555,34 +837,51 @@ class _ChatBubble extends StatelessWidget {
     final bubbleColor =
         isMe ? const Color(0xFFFAFD9F) : const Color(0xFFC9D3C9);
     final align = isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final name = senderName?.trim();
+    final hasName = name != null && name.isNotEmpty;
 
     return Column(
       crossAxisAlignment: align,
       children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Row(
+            mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            children: [
+              if (!isMe) ...[
+                _buildAvatar(),
+                const SizedBox(width: 8),
+                if (hasName)
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF1B5E20),
+                      fontFamily: 'Trirong',
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ] else ...[
+                if (hasName)
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF1B5E20),
+                      fontFamily: 'Trirong',
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                if (hasName) const SizedBox(width: 8),
+                _buildAvatar(),
+              ]
+            ],
+          ),
+        ),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment:
-              isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+          mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
           children: [
-            // Default icon για incoming messages
-            if (!isMe)
-              Container(
-                width: 32,
-                height: 32,
-                margin: const EdgeInsets.only(right: 8, top: 8),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFFC9D3C9),
-                  border: Border.all(color: const Color(0xFF1B5E20), width: 1),
-                ),
-                child: const Icon(
-                  Icons.business,
-                  size: 16,
-                  color: Color(0xFF1B5E20),
-                ),
-              ),
-
-            // Message bubble
             Flexible(
               child: Container(
                 margin: const EdgeInsets.symmetric(vertical: 8),

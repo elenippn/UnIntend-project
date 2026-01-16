@@ -390,12 +390,25 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
         final cid = message['conversationId'] is int
             ? message['conversationId'] as int
             : int.tryParse(message['conversationId']?.toString() ?? '') ?? 0;
-        if (cid != 0) {
-          final token = (message['previewToken'] ?? '').toString();
-          setState(() {
-            _seenPreviewTokenByConversationId[cid] = token;
-          });
+        if (cid == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Conversation not available yet'),
+            ),
+          );
+          return;
         }
+
+        final token = (message['previewToken'] ?? '').toString();
+        setState(() {
+          _seenPreviewTokenByConversationId[cid] = token;
+        });
+
+        final derived = deriveApplicationStatus(
+          applicationStatusRaw: (message['status'] ?? '').toString(),
+          lastMessage: (message['lastMessage'] ?? '').toString(),
+          lastSystemMessage: _conversationLastSystemText[cid],
+        );
 
         Navigator.push(
           context,
@@ -404,9 +417,8 @@ class _MessagesCompanyScreenState extends State<MessagesCompanyScreen>
               conversationId: cid,
               title: (message['student'] ?? '').toString(),
               contextLine: message['contextLine'] ?? '',
-              subtitle: (message['status'] ?? '').toString(),
-              canSend: (message['type'] ?? '').toString().toUpperCase() ==
-                  'ACCEPTED',
+              subtitle: displayApplicationStatus(derived),
+              canSend: derived == 'ACCEPTED',
             ),
           ),
         );
