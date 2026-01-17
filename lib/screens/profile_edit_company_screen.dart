@@ -239,6 +239,11 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
                 ),
               ),
               IconButton(
+                tooltip: 'Edit',
+                icon: const Icon(Icons.edit, color: Color(0xFF1B5E20)),
+                onPressed: _isSaving ? null : () => _editPost(p),
+              ),
+              IconButton(
                 tooltip: 'Delete',
                 icon: const Icon(Icons.delete, color: Color(0xFF1B5E20)),
                 onPressed: _isSaving ? null : () => _confirmDeletePost(p),
@@ -269,6 +274,169 @@ class _ProfileEditCompanyScreenState extends State<ProfileEditCompanyScreen> {
         _postsError = friendlyApiError(e);
         _isPostsLoading = false;
       });
+    }
+  }
+
+  Future<void> _editPost(InternshipPostDto post) async {
+    final titleController = TextEditingController(text: post.title);
+    final descController = TextEditingController(text: post.description);
+    final locationController = TextEditingController(text: post.location ?? '');
+    final departmentController = TextEditingController(text: post.department ?? '');
+    File? selectedImage;
+    final imageNotifier = ValueNotifier<File?>(null);
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Edit Post', style: TextStyle(fontFamily: 'Trirong')),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ValueListenableBuilder<File?>(
+                  valueListenable: imageNotifier,
+                  builder: (context, image, _) {
+                    return GestureDetector(
+                      onTap: () async {
+                        final source = await showModalBottomSheet<ImageSource>(
+                          context: context,
+                          builder: (ctx) {
+                            return SafeArea(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ListTile(
+                                    leading: const Icon(Icons.photo_library),
+                                    title: const Text('Gallery'),
+                                    onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                                  ),
+                                  ListTile(
+                                    leading: const Icon(Icons.photo_camera),
+                                    title: const Text('Camera'),
+                                    onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                        if (source == null) return;
+                        final picked = await _picker.pickImage(
+                          source: source,
+                          imageQuality: 85,
+                          maxWidth: 1600,
+                        );
+                        if (picked != null) {
+                          selectedImage = File(picked.path);
+                          imageNotifier.value = selectedImage;
+                        }
+                      },
+                      child: Container(
+                        height: 120,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: const Color(0xFF1B5E20)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: image != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(image, fit: BoxFit.cover),
+                              )
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  Icon(Icons.add_photo_alternate, size: 40, color: Color(0xFF1B5E20)),
+                                  SizedBox(height: 8),
+                                  Text('Tap to change image', style: TextStyle(fontFamily: 'Trirong')),
+                                ],
+                              ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Title',
+                    border: OutlineInputBorder(),
+                  ),
+                  style: const TextStyle(fontFamily: 'Trirong'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descController,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                  style: const TextStyle(fontFamily: 'Trirong'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: locationController,
+                  decoration: const InputDecoration(
+                    labelText: 'Location (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                  style: const TextStyle(fontFamily: 'Trirong'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: departmentController,
+                  decoration: const InputDecoration(
+                    labelText: 'Department (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                  style: const TextStyle(fontFamily: 'Trirong'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true) return;
+
+    try {
+      // Upload new image if selected
+      final imgFile = selectedImage;
+      if (imgFile != null) {
+        await AppServices.media.uploadInternshipPostImage(post.id, imgFile);
+      }
+      
+      // Update post text fields
+      await AppServices.posts.updateCompanyPost(
+        postId: post.id,
+        title: titleController.text,
+        description: descController.text,
+        location: locationController.text.isEmpty ? null : locationController.text,
+        department: departmentController.text.isEmpty ? null : departmentController.text,
+      );
+      await _loadMyPosts();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Post updated')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyApiError(e))),
+      );
     }
   }
 

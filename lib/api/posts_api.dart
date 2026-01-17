@@ -42,6 +42,23 @@ class PostsApi {
         .toList();
   }
 
+  Future<InternshipPostDto> updateCompanyPost({
+    required int postId,
+    required String title,
+    required String description,
+    String? location,
+    String? department,
+  }) async {
+    final res = await client.put('/posts/$postId', data: {
+      'title': title,
+      'description': description,
+      'location': location,
+      'department': department,
+    });
+    return InternshipPostDto.fromJson(
+        Map<String, dynamic>.from(res.data as Map));
+  }
+
   Future<void> deleteCompanyPost(int postId) async {
     try {
       await client.delete('/posts/$postId');
@@ -92,6 +109,20 @@ class PostsApi {
         .map(
             (e) => ProfilePostDto.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
+  }
+
+  Future<ProfilePostDto> updateProfilePost({
+    required int postId,
+    required String title,
+    required String description,
+    String? category,
+  }) async {
+    final res = await client.put('/profile-posts/$postId', data: {
+      'title': title,
+      'description': description,
+      'category': category,
+    });
+    return ProfilePostDto.fromJson(Map<String, dynamic>.from(res.data as Map));
   }
 
   Future<void> deleteProfilePost(int postId) async {

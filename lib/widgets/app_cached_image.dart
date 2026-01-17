@@ -18,6 +18,8 @@ class AppCachedImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = imageUrl;
+    print('🖼️  AppCachedImage - URL: $url');
+    
     final placeholder = Container(
       width: width,
       height: height,
@@ -32,9 +34,11 @@ class AppCachedImage extends StatelessWidget {
     );
 
     if (url == null || url.trim().isEmpty) {
+      print('⚠️  AppCachedImage - No URL provided, showing placeholder');
       return placeholder;
     }
 
+    print('✅ AppCachedImage - Loading image from: $url');
     return ClipRRect(
       borderRadius: borderRadius ?? BorderRadius.zero,
       child: CachedNetworkImage(
@@ -43,7 +47,10 @@ class AppCachedImage extends StatelessWidget {
         height: height,
         fit: BoxFit.cover,
         placeholder: (context, _) => placeholder,
-        errorWidget: (context, _, __) => placeholder,
+        errorWidget: (context, _, error) {
+          print('❌ AppCachedImage - Error loading image: $error');
+          return placeholder;
+        },
       ),
     );
   }
@@ -64,6 +71,7 @@ class AppProfileAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = imageUrl;
+    print('👤 AppProfileAvatar - URL: $url (size: $size)');
 
     Widget fallback() {
       return Center(
@@ -76,9 +84,11 @@ class AppProfileAvatar extends StatelessWidget {
     }
 
     if (url == null || url.trim().isEmpty) {
+      print('⚠️  AppProfileAvatar - No URL, showing fallback icon');
       return fallback();
     }
 
+    print('✅ AppProfileAvatar - Loading avatar from: $url');
     return ClipOval(
       child: CachedNetworkImage(
         imageUrl: url,
@@ -86,7 +96,10 @@ class AppProfileAvatar extends StatelessWidget {
         height: size,
         fit: BoxFit.cover,
         placeholder: (context, _) => fallback(),
-        errorWidget: (context, _, __) => fallback(),
+        errorWidget: (context, _, error) {
+          print('❌ AppProfileAvatar - Error loading avatar: $error');
+          return fallback();
+        },
       ),
     );
   }
