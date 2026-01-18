@@ -63,7 +63,11 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Login failed: ${friendlyApiError(e)}")),
+        SnackBar(
+          content: Text(
+            "Login failed (API: ${AppServices.baseUrl}): ${friendlyApiError(e)}",
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);

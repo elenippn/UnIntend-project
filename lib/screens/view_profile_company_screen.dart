@@ -83,7 +83,7 @@ class _ViewProfileCompanyScreenState extends State<ViewProfileCompanyScreen> {
     final String companyName =
         (profile?.companyName?.trim().isNotEmpty ?? false)
             ? profile!.companyName!
-            : (profile?.name?.trim().isNotEmpty ?? false)
+        : (profile?.name.trim().isNotEmpty ?? false)
                 ? profile!.name
                 : (company['companyName'] ?? company['name'] ?? '') as String;
 
