@@ -10,7 +10,7 @@ String friendlyApiError(Object error) {
     if (error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.receiveTimeout ||
         error.type == DioExceptionType.sendTimeout) {
-      return 'Network timeout. Please retry.';
+      return 'Network timeout. Please retry (the server may be waking up).';
     }
     return 'Network error. Please retry.';
   }

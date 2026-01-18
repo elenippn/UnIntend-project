@@ -8,8 +8,11 @@ class ApiClient {
   ApiClient({required String baseUrl})
       : dio = Dio(BaseOptions(
           baseUrl: baseUrl,
-          connectTimeout: const Duration(seconds: 8),
-          receiveTimeout: const Duration(seconds: 8),
+          // Render free tier can "cold start" and take ~30-50s on the first request.
+          // Use higher timeouts so the app doesn't fail with a misleading network error.
+          connectTimeout: const Duration(seconds: 45),
+          receiveTimeout: const Duration(seconds: 45),
+          sendTimeout: const Duration(seconds: 45),
         ));
 
   Future<String?> getToken() => storage.read(key: 'token');

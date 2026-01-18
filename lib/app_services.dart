@@ -16,8 +16,15 @@ class AppServices {
   static const String _apiBaseUrlOverride =
       String.fromEnvironment('API_BASE_URL');
 
+  static const String _releaseBaseUrlFallback =
+      'https://unintend-backend-1.onrender.com';
+
   static String get baseUrl {
     if (_apiBaseUrlOverride.isNotEmpty) return _apiBaseUrlOverride;
+
+    // On real devices, the non-overridden Android default (10.0.2.2) only works
+    // for emulators. Default release builds to the hosted API.
+    if (kReleaseMode && !kIsWeb) return _releaseBaseUrlFallback;
 
     if (kIsWeb) return 'http://${Uri.base.host}:8000';
 
